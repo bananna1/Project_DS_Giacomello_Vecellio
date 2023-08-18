@@ -52,6 +52,11 @@
     "last_opened_file_path": "C:/Users/annag/OneDrive/Desktop/Varie/Unitn/Distributed systems/Lab/hello"
   }
 }]]></component>
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Users\annag\OneDrive\Desktop\Varie\Unitn\Distributed systems\Project_DS_Giacomello_Vecellio\Project_DS_Giacomello_Vecellio\src" />
+    </key>
+  </component>
   <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
   <component name="TaskManager">
     <task active="true" id="Default" summary="Default task">
@@ -62,5 +67,16 @@
       <updated>1692345479583</updated>
     </task>
     <servers />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
   </component>
 </project>
