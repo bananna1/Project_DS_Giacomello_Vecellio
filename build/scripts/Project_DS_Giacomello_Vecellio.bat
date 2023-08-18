@@ -68,7 +68,7 @@ goto fail
 :execute
 @rem Setup the command line
 
-set CLASSPATH=%APP_HOME%\lib\Project_DS_Giacomello_Vecellio.jar;%APP_HOME%\lib\akka-actor_2.13-2.6.13.jar;%APP_HOME%\lib\scala-java8-compat_2.13-0.9.0.jar;%APP_HOME%\lib\scala-library-2.13.3.jar;%APP_HOME%\lib\config-1.4.0.jar
+set CLASSPATH=%APP_HOME%\lib\Project_DS_Giacomello_Vecellio.jar;%APP_HOME%\lib\akka-projection-core_2.13-1.4.2.jar;%APP_HOME%\lib\akka-persistence-query_2.13-2.8.1.jar;%APP_HOME%\lib\akka-persistence_2.13-2.8.1.jar;%APP_HOME%\lib\akka-stream_2.13-2.8.1.jar;%APP_HOME%\lib\akka-actor-typed_2.13-2.8.1.jar;%APP_HOME%\lib\akka-slf4j_2.13-2.8.1.jar;%APP_HOME%\lib\akka-actor_2.13-2.8.1.jar;%APP_HOME%\lib\ssl-config-core_2.13-0.6.1.jar;%APP_HOME%\lib\scala-java8-compat_2.13-1.0.0.jar;%APP_HOME%\lib\scala-library-2.13.10.jar;%APP_HOME%\lib\akka-protobuf-v3_2.13-2.8.1.jar;%APP_HOME%\lib\reactive-streams-1.0.4.jar;%APP_HOME%\lib\slf4j-api-1.7.36.jar;%APP_HOME%\lib\config-1.4.2.jar
 
 
 @rem Execute Project_DS_Giacomello_Vecellio
