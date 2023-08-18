@@ -5,21 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="ff06f875-b150-446c-9dc7-f254b1c1f17f" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.gradle/8.0.2/executionHistory/executionHistory.bin" beforeDir="false" afterPath="$PROJECT_DIR$/.gradle/8.0.2/executionHistory/executionHistory.bin" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.gradle/8.0.2/executionHistory/executionHistory.lock" beforeDir="false" afterPath="$PROJECT_DIR$/.gradle/8.0.2/executionHistory/executionHistory.lock" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.gradle/8.0.2/fileHashes/fileHashes.bin" beforeDir="false" afterPath="$PROJECT_DIR$/.gradle/8.0.2/fileHashes/fileHashes.bin" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.gradle/8.0.2/fileHashes/fileHashes.lock" beforeDir="false" afterPath="$PROJECT_DIR$/.gradle/8.0.2/fileHashes/fileHashes.lock" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.gradle/8.0.2/fileHashes/resourceHashesCache.bin" beforeDir="false" afterPath="$PROJECT_DIR$/.gradle/8.0.2/fileHashes/resourceHashesCache.bin" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.gradle/buildOutputCleanup/buildOutputCleanup.lock" beforeDir="false" afterPath="$PROJECT_DIR$/.gradle/buildOutputCleanup/buildOutputCleanup.lock" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.gradle/buildOutputCleanup/outputFiles.bin" beforeDir="false" afterPath="$PROJECT_DIR$/.gradle/buildOutputCleanup/outputFiles.bin" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/build.gradle" beforeDir="false" afterPath="$PROJECT_DIR$/build.gradle" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/build/distributions/Project_DS_Giacomello_Vecellio.tar" beforeDir="false" afterPath="$PROJECT_DIR$/build/distributions/Project_DS_Giacomello_Vecellio.tar" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/build/distributions/Project_DS_Giacomello_Vecellio.zip" beforeDir="false" afterPath="$PROJECT_DIR$/build/distributions/Project_DS_Giacomello_Vecellio.zip" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/build/libs/Project_DS_Giacomello_Vecellio.jar" beforeDir="false" afterPath="$PROJECT_DIR$/build/libs/Project_DS_Giacomello_Vecellio.jar" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/build/scripts/Project_DS_Giacomello_Vecellio" beforeDir="false" afterPath="$PROJECT_DIR$/build/scripts/Project_DS_Giacomello_Vecellio" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/build/scripts/Project_DS_Giacomello_Vecellio.bat" beforeDir="false" afterPath="$PROJECT_DIR$/build/scripts/Project_DS_Giacomello_Vecellio.bat" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/Prova.java" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
