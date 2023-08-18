@@ -72,7 +72,7 @@ set CLASSPATH=%APP_HOME%\lib\Project_DS_Giacomello_Vecellio.jar;%APP_HOME%\lib\a
 
 
 @rem Execute Project_DS_Giacomello_Vecellio
-"%JAVA_EXE%" %DEFAULT_JVM_OPTS% %JAVA_OPTS% %PROJECT_DS_GIACOMELLO_VECELLIO_OPTS%  -classpath "%CLASSPATH%" it.unitn.ds1.HelloExample %*
+"%JAVA_EXE%" %DEFAULT_JVM_OPTS% %JAVA_OPTS% %PROJECT_DS_GIACOMELLO_VECELLIO_OPTS%  -classpath "%CLASSPATH%" DHTSystem %*
 
 :end
 @rem End local scope for the variables with windows NT shell
