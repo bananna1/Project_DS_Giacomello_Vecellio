@@ -15,28 +15,104 @@ import java.util.List;
 import java.util.ArrayList;
 import java.lang.Thread;
 import java.lang.InterruptedException;
+
 import java.util.Collections;
 
-public class Node extends AbstractActor{
+
+public abstract class Node extends AbstractActor{
 
     // Start message that sends the list of participants to everyone
     public static class StartMessage implements Serializable {
-        public final List<ActorRef> group;
-        public StartMessage(List<ActorRef> group) {
+        public final List<Peer> group;
+        public StartMessage(List<Peer> group) {
               this.group = Collections.unmodifiableList(new ArrayList<>(group));
         }
-  }
+    }
+
+    private class Item {
+        private String value;
+        private int version;
+
+        public Item (String value, int version) {
+            this.value = value;
+            this.version = version;
+        }
+        public void updateItem (String newValue) {
+            this.value = newValue;
+            this.version ++;
+        }
+    }
+
+    private class Peer {
+        private ActorRef actor;
+        private int id;
+
+        public Peer(ActorRef actor, int id) {
+            this.actor = actor;
+            this.id = id;
+        }
+        public ActorRef getActor() {
+            return this.actor;
+        }
+
+        public int getID() {
+            return this.id;
+        }
+    }
+
+    public static class GetValueMsg implements Serializable {
+        public final int key;
+        public GetValueMsg(int key) {
+            this.key = key;
+        }
+    }
+
+    public static class RequestValueMsg implements Serializable {
+        public final int key;
+        public RequestValueMsg(int key) {
+            this.key = key;
+        }
+    }
+
+    public static class ValueResponseMsg implements Serializable {
+        public final Item item;
+        public ValueResponseMsg(Item item) {
+            this.item = item;
+        }
+    }
+
+    public static class ReturnValueMsg implements Serializable {
+        public final Item item;
+        public ReturnValueMsg(Item item) {
+            this.item = item;
+        }
+    }
 
     private int id;                                                         // Node ID        
-    private Hashtable<Integer, String> values = new Hashtable<>();          // list of keys and values
-    private List<ActorRef> peers = new ArrayList<>();                       // list of peer banks
+    private Hashtable<Integer, Item> values = new Hashtable<>();            // list of keys and values
+    private List<Peer> peers = new ArrayList<>();                       // list of peer banks
 
     private boolean isCoordinator = false;                                  // the node is the coordinator
 
+    private Node next;
+    private Node previous;
+
+    private int nResponses = 0;
+    private Item currBest = null;
+
+    private ActorRef currClient = null;
+
+    public final int N = 4;
+
+    public final int read_quorum = N / 2 + 1;
+    public final int write_quorum = N / 2 + 1;
+
     /*-- Actor constructors --------------------------------------------------- */
-    public Node(int id, boolean isCoordinator){
+    public Node(int id, boolean isCoordinator, Node next, Node previous){
         this.id = id; 
         this.isCoordinator = isCoordinator;
+        this.next = next;
+        this.previous = previous;
     }
 
     public int getID() {
@@ -47,13 +123,13 @@ public class Node extends AbstractActor{
         values.remove(key);
     }
 
-    public void addValue (int key, String value) {
-        values.put(key, value);
+    public void addValue (int key, String value, int version) {
+        values.put(key, new Item(value, version));
     }
 
     void setGroup(StartMessage sm) {
         peers = new ArrayList<>();
-        for (ActorRef b: sm.group) {
+        for (Peer b: sm.group) {
           if (!b.equals(getSelf())) {
   
             // copying all participant refs except for self
@@ -61,13 +137,70 @@ public class Node extends AbstractActor{
           }
         }
         //print("starting with " + sm.group.size() + " peer(s)");
-      }
+    }
+    public void updatePrevious(Node newPrev) {
+        this.previous = newPrev;
+    }
+
+    public void updateNext(Node newNext) {
+        this.previous = newNext;
+    }
+
+    private void onGetValueMsg(GetValueMsg msg) {
+        System.out.println(msg.key);
+        currClient = getSender();
+        int key = msg.key;
+        int index = 0;
+        for (int i = 0; i < peers.size(); i++) {
+            if (peers.get(i).getID() > N) {
+                index = i;
+                break;
+                // If we're not able to find a node whose ID is greater than the key,
+                // then the first node to store the value is necessarily the node with the lowest ID (aka index = 0)
+            }
+        }
+        for (int i = index; i < N + index; i++) {
+            int length = peers.size();
+            ActorRef actor = peers.get(i % length).getActor();
+            actor.tell(new RequestValueMsg(key), getSelf());
+        }
+    }
+
+    private void onRequestValueMsg(RequestValueMsg msg) {
+        Item i = values.get(msg.key);
+        ActorRef sender = getSender();
+        sender.tell(new ValueResponseMsg(i), getSelf());
+
+    }
+
+    private void onValueResponseMsg(ValueResponseMsg msg) {
+        nResponses ++;
+        if (currBest == null) {
+            currBest = msg.item;
+        }
+        else {
+            if (msg.item.version > currBest.version) {
+                currBest = msg.item;
+            }
+        }
+        if (nResponses >= N / 2) {
+            currClient.tell(new ReturnValueMsg(currBest), getSelf());
+        }
+    }
+
+
+
 
     @SuppressWarnings("unchecked")
     @Override
     public Receive createReceive() {
-        return null;
-    
+        return receiveBuilder()
+                .match(GetValueMsg.class, this::onGetValueMsg)
+                //.match(UpdateValueMsg.class, this::onUpdateValueMsg)
+                .match(RequestValueMsg.class, this::onRequestValueMsg)
+                .match(ValueResponseMsg.class, this::onValueResponseMsg)
+                //.match(ReturnValueMsg.class, this::onReturnValueMsg)  NON CREDO SERVA PERCHE' L'HANDLER DEVE AVERLO IL CLIENT
+                .build();
     }
 }
 
