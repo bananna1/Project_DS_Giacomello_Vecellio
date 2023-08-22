@@ -108,11 +108,14 @@ public abstract class Node extends AbstractActor{
     public final int write_quorum = N / 2 + 1;
 
     /*-- Actor constructors --------------------------------------------------- */
-    public Node(int id, boolean isCoordinator, Node next, Node previous){
-        this.id = id; 
-        this.isCoordinator = isCoordinator;
+    public Node(int id /*boolean isCoordinator, Node next, Node previous*/){
+        super();
+        this.id = id;
+        /*
         this.next = next;
         this.previous = previous;
+
+         */
     }
 
     public int getID() {
@@ -152,7 +155,7 @@ public abstract class Node extends AbstractActor{
         int key = msg.key;
         int index = 0;
         for (int i = 0; i < peers.size(); i++) {
-            if (peers.get(i).getID() > N) {
+            if (peers.get(i).getID() > key) {
                 index = i;
                 break;
                 // If we're not able to find a node whose ID is greater than the key,
@@ -183,8 +186,9 @@ public abstract class Node extends AbstractActor{
                 currBest = msg.item;
             }
         }
-        if (nResponses >= N / 2) {
+        if (nResponses >= read_quorum) {
             currClient.tell(new ReturnValueMsg(currBest), getSelf());
+            // TODO bloccare successive risposte per questa richiesta
         }
     }
 
