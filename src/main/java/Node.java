@@ -1,8 +1,5 @@
+import akka.actor.*;
 import akka.actor.AbstractActor;
-import akka.actor.ActorRef;
-import akka.actor.AbstractActor;
-import akka.actor.Cancellable;
-import akka.actor.Props;
 import scala.concurrent.duration.Duration;
 
 import java.io.Serializable;
@@ -60,6 +57,26 @@ public abstract class Node extends AbstractActor{
         }
     }
 
+    public enum RequestType {
+        Read,
+        Write,
+        Update
+    }
+
+    private class Request {
+        private int id;
+        private int key;
+        private RequestType type;
+        private ActorRef client;
+
+        public Request(int id, int key, RequestType type, ActorRef client) {
+            this.id = id;
+            this.key = key;
+            this.type = type;
+            this.client = client;
+        }
+    }
+
     public static class GetValueMsg implements Serializable {
         public final int key;
         public GetValueMsg(int key) {
@@ -91,19 +108,12 @@ public abstract class Node extends AbstractActor{
     private int id;                                                         // Node ID        
     private Hashtable<Integer, Item> values = new Hashtable<>();            // list of keys and values
     private List<Peer> peers = new ArrayList<>();                       // list of peer banks
-
-    private boolean isCoordinator = false;                                  // the node is the coordinator
-
     private Node next;
     private Node previous;
-
     private int nResponses = 0;
     private Item currBest = null;
-
     private ActorRef currClient = null;
-
     public final int N = 4;
-
     public final int read_quorum = N / 2 + 1;
     public final int write_quorum = N / 2 + 1;
 
