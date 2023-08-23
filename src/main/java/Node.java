@@ -1,5 +1,8 @@
-import akka.actor.*;
 import akka.actor.AbstractActor;
+import akka.actor.ActorRef;
+import akka.actor.AbstractActor;
+import akka.actor.Cancellable;
+import akka.actor.Props;
 import scala.concurrent.duration.Duration;
 
 import java.io.Serializable;
@@ -11,6 +14,7 @@ import java.util.Hashtable;
 import java.util.List;
 import java.util.ArrayList;
 import java.lang.Thread;
+import java.lang.invoke.StringConcatException;
 import java.lang.InterruptedException;
 
 import java.util.Collections;
@@ -57,26 +61,6 @@ public abstract class Node extends AbstractActor{
         }
     }
 
-    public enum RequestType {
-        Read,
-        Write,
-        Update
-    }
-
-    private class Request {
-        private int id;
-        private int key;
-        private RequestType type;
-        private ActorRef client;
-
-        public Request(int id, int key, RequestType type, ActorRef client) {
-            this.id = id;
-            this.key = key;
-            this.type = type;
-            this.client = client;
-        }
-    }
-
     public static class GetValueMsg implements Serializable {
         public final int key;
         public GetValueMsg(int key) {
@@ -84,17 +68,37 @@ public abstract class Node extends AbstractActor{
         }
     }
 
+    /*public static class UpdateValueMsg implements Serializable {
+        public final int key;
+        public UpdateValueMsg(int key) {
+            this.key = key;
+        }
+    }*/
+
+    public static class CreateValueMsg implements Serializable {
+        public final int key;
+        public final String value;
+        public CreateValueMsg(int key, String value) {
+            this.key = key;
+            this.value = value;
+        }
+    }
+
     public static class RequestValueMsg implements Serializable {
         public final int key;
-        public RequestValueMsg(int key) {
+        public final boolean requestRead;
+        public RequestValueMsg(int key, boolean requestRead) {
             this.key = key;
+            this.requestRead = requestRead;
         }
     }
 
     public static class ValueResponseMsg implements Serializable {
         public final Item item;
-        public ValueResponseMsg(Item item) {
+        public final boolean requestRead;
+        public ValueResponseMsg(Item item, boolean requestRead) {
             this.item = item;
+            this.requestRead = requestRead;
         }
     }
 
@@ -107,13 +111,20 @@ public abstract class Node extends AbstractActor{
 
     private int id;                                                         // Node ID        
     private Hashtable<Integer, Item> values = new Hashtable<>();            // list of keys and values
-    private List<Peer> peers = new ArrayList<>();                       // list of peer banks
+    private List<Peer> peers = new ArrayList<>();                           // list of peer banks
+
+    private boolean isCoordinator = false;                                  // the node is the coordinator
+
     private Node next;
     private Node previous;
+
     private int nResponses = 0;
     private Item currBest = null;
+
     private ActorRef currClient = null;
+
     public final int N = 4;
+
     public final int read_quorum = N / 2 + 1;
     public final int write_quorum = N / 2 + 1;
 
@@ -159,10 +170,7 @@ public abstract class Node extends AbstractActor{
         this.previous = newNext;
     }
 
-    private void onGetValueMsg(GetValueMsg msg) {
-        System.out.println(msg.key);
-        currClient = getSender();
-        int key = msg.key;
+    private int getIndexOfFirstNode (int key) {
         int index = 0;
         for (int i = 0; i < peers.size(); i++) {
             if (peers.get(i).getID() > key) {
@@ -172,18 +180,45 @@ public abstract class Node extends AbstractActor{
                 // then the first node to store the value is necessarily the node with the lowest ID (aka index = 0)
             }
         }
+        return index;
+    }
+
+    private void onGetValueMsg(GetValueMsg msg) {
+        System.out.println(msg.key);
+        currClient = getSender();
+        int key = msg.key;
+        
+        int index = getIndexOfFirstNode(key);
+
         for (int i = index; i < N + index; i++) {
             int length = peers.size();
             ActorRef actor = peers.get(i % length).getActor();
-            actor.tell(new RequestValueMsg(key), getSelf());
+            actor.tell(new RequestValueMsg(key, true), getSelf());
         }
+    }
+
+    private void onCreateValueMsg(CreateValueMsg msg){
+        System.out.println(msg.key + " : " + msg.value);
+
+        currClient = getSender();
+        int key = msg.key;
+
+        int index = getIndexOfFirstNode(key);
+
+
+        for (int i = index; i < N + index; i++) {
+            int length = peers.size();
+            ActorRef actor = peers.get(i % length).getActor();
+            actor.tell(new RequestValueMsg(key, false), getSelf());
+        }
+
     }
 
     private void onRequestValueMsg(RequestValueMsg msg) {
         Item i = values.get(msg.key);
         ActorRef sender = getSender();
-        sender.tell(new ValueResponseMsg(i), getSelf());
-
+        boolean requestRead = msg.requestRead;
+        sender.tell(new ValueResponseMsg(i, requestRead), getSelf());
     }
 
     private void onValueResponseMsg(ValueResponseMsg msg) {
@@ -196,10 +231,22 @@ public abstract class Node extends AbstractActor{
                 currBest = msg.item;
             }
         }
-        if (nResponses >= read_quorum) {
-            currClient.tell(new ReturnValueMsg(currBest), getSelf());
-            // TODO bloccare successive risposte per questa richiesta
+
+        if(msg.requestRead){    //READ
+            if (nResponses >= read_quorum) {
+                currClient.tell(new ReturnValueMsg(currBest), getSelf());
+                // TODO bloccare successive risposte per questa richiesta
+            }
         }
+        else {                  //WRITE
+            if (nResponses >= write_quorum) {
+                //FARE L'UPDATE DI TUTTO
+                //this.values.updateItem(msg.item.value);
+                currClient.tell(new ReturnValueMsg(currBest), getSelf());
+                // TODO bloccare successive risposte per questa richiesta
+            }
+        }
+        
     }
 
 
@@ -211,6 +258,7 @@ public abstract class Node extends AbstractActor{
         return receiveBuilder()
                 .match(GetValueMsg.class, this::onGetValueMsg)
                 //.match(UpdateValueMsg.class, this::onUpdateValueMsg)
+                .match(CreateValueMsg.class, this::onCreateValueMsg)
                 .match(RequestValueMsg.class, this::onRequestValueMsg)
                 .match(ValueResponseMsg.class, this::onValueResponseMsg)
                 //.match(ReturnValueMsg.class, this::onReturnValueMsg)  NON CREDO SERVA PERCHE' L'HANDLER DEVE AVERLO IL CLIENT
