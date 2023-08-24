@@ -1,21 +1,10 @@
+import akka.actor.*;
 import akka.actor.AbstractActor;
-import akka.actor.ActorRef;
-import akka.actor.AbstractActor;
-import akka.actor.Cancellable;
-import akka.actor.Props;
-import scala.concurrent.duration.Duration;
 
 import java.io.Serializable;
-import java.util.concurrent.TimeUnit;
-import java.util.Random;
-import java.util.Set;
-import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.ArrayList;
-import java.lang.Thread;
-import java.lang.invoke.StringConcatException;
-import java.lang.InterruptedException;
 
 import java.util.Collections;
 
@@ -34,6 +23,9 @@ public abstract class Node extends AbstractActor{
         private String value;
         private int version;
 
+        private boolean lockedUpdate = false;
+        private int nLockedRead = 0;
+
         public Item (String value, int version) {
             this.value = value;
             this.version = version;
@@ -41,6 +33,32 @@ public abstract class Node extends AbstractActor{
         public void updateItem (String newValue) {
             this.value = newValue;
             this.version ++;
+        }
+        public boolean lockUpdate() {
+            if (this.lockedUpdate || this.nLockedRead > 0) {
+                return false;
+            }
+            this.lockedUpdate = true;
+            return true;
+        }
+        public void unlockUpdate() {
+            this.lockedUpdate = false;
+        }
+        public boolean isLockedUpdate() {
+            return this.lockedUpdate;
+        }
+        public boolean lockRead() {
+            if (this.lockedUpdate) {
+                return false;
+            }
+            nLockedRead ++;
+            return true;
+        }
+        public void unlockRead() {
+            nLockedRead --;
+            if (nLockedRead < 0) { // per sicurezza
+                nLockedRead = 0;
+            }
         }
     }
 
@@ -58,6 +76,31 @@ public abstract class Node extends AbstractActor{
 
         public int getID() {
             return this.id;
+        }
+    }
+
+    public enum RequestType {
+        Read,
+        Update
+    }
+
+    private class Request {
+        private int id;
+        private int key;
+        private RequestType type;
+        private ActorRef client;
+
+        public Request(int id, int key, RequestType type, ActorRef client) {
+            this.id = id;
+            this.key = key;
+            this.type = type;
+            this.client = client;
+        }
+        public void setClient(ActorRef client) { // FORSE NON SERVE
+            this.client = client;
+        }
+        public ActorRef getClient() {
+            return this.client;
         }
     }
 
@@ -84,21 +127,35 @@ public abstract class Node extends AbstractActor{
         }
     }
 
+    public static class RequestAccessMsg implements Serializable {
+        public final Request request;
+        public RequestAccessMsg(Request request) {
+            this.request = request;
+        }
+    }
+
     public static class RequestValueMsg implements Serializable {
-        public final int key;
-        public final boolean requestRead;
-        public RequestValueMsg(int key, boolean requestRead) {
-            this.key = key;
-            this.requestRead = requestRead;
+        public final Request request;
+        public RequestValueMsg(Request request) {
+            this.request = request;
+        }
+    }
+
+    public static class AccessResponseMsg implements Serializable {
+        public final boolean accessGranted;
+        public final Request request;
+        public AccessResponseMsg(boolean accessGranted, Request request) {
+            this.accessGranted = accessGranted;
+            this.request = request;
         }
     }
 
     public static class ValueResponseMsg implements Serializable {
         public final Item item;
-        public final boolean requestRead;
-        public ValueResponseMsg(Item item, boolean requestRead) {
+        public final Request request;
+        public ValueResponseMsg(Item item, Request request) {
             this.item = item;
-            this.requestRead = requestRead;
+            this.request = request;
         }
     }
 
@@ -121,7 +178,13 @@ public abstract class Node extends AbstractActor{
     private int nResponses = 0;
     private Item currBest = null;
 
-    private ActorRef currClient = null;
+    private Request currRequest;
+
+    private ArrayList<Request> requestQueue = new ArrayList<>();
+
+
+
+
 
     public final int N = 4;
 
@@ -135,7 +198,6 @@ public abstract class Node extends AbstractActor{
         /*
         this.next = next;
         this.previous = previous;
-
          */
     }
 
@@ -154,11 +216,7 @@ public abstract class Node extends AbstractActor{
     void setGroup(StartMessage sm) {
         peers = new ArrayList<>();
         for (Peer b: sm.group) {
-          if (!b.equals(getSelf())) {
-  
-            // copying all participant refs except for self
             this.peers.add(b);
-          }
         }
         //print("starting with " + sm.group.size() + " peer(s)");
     }
@@ -183,25 +241,25 @@ public abstract class Node extends AbstractActor{
         return index;
     }
 
+    public void onStartMessage(StartMessage msg) {
+        setGroup(msg);
+    }
+
     private void onGetValueMsg(GetValueMsg msg) {
         System.out.println(msg.key);
-        currClient = getSender();
         int key = msg.key;
-        
+        Request newRequest = new Request(0, key, RequestType.Read, getSender()); // TODO scegliere come assegnare id richieste
+
         int index = getIndexOfFirstNode(key);
 
-        for (int i = index; i < N + index; i++) {
-            int length = peers.size();
-            ActorRef actor = peers.get(i % length).getActor();
-            actor.tell(new RequestValueMsg(key, true), getSelf());
-        }
+        ActorRef owner = peers.get(index).getActor();
+        owner.tell(new RequestAccessMsg(newRequest), getSelf());
     }
 
     private void onCreateValueMsg(CreateValueMsg msg){
         System.out.println(msg.key + " : " + msg.value);
-
-        currClient = getSender();
         int key = msg.key;
+        Request newRequest = new Request(0, key, RequestType.Update, getSender());
 
         int index = getIndexOfFirstNode(key);
 
@@ -209,16 +267,50 @@ public abstract class Node extends AbstractActor{
         for (int i = index; i < N + index; i++) {
             int length = peers.size();
             ActorRef actor = peers.get(i % length).getActor();
-            actor.tell(new RequestValueMsg(key, false), getSelf());
+            actor.tell(new RequestValueMsg(newRequest), getSelf());
         }
 
     }
 
+    private void onRequestAccessMsg(RequestAccessMsg msg) {
+        Item i = values.get(msg.request.key);
+        ActorRef coordinator = getSender();
+        boolean accessGranted;
+        if (msg.request.type == RequestType.Read) {
+            accessGranted = i.lockRead();
+        }
+        else {
+            accessGranted = i.lockUpdate();
+        }
+
+        if (accessGranted) {
+            coordinator.tell(new AccessResponseMsg(true, msg.request), getSelf());
+        }
+        else {
+            coordinator.tell(new AccessResponseMsg(false, msg.request), getSelf());
+        }
+    }
+
+    private void onAccessResponseMsg(AccessResponseMsg msg) {
+        if (msg.accessGranted) {
+            int key = msg.request.key;
+            int index = getIndexOfFirstNode(key);
+            for (int i = index; i < N + index; i++) {
+                int length = peers.size();
+                ActorRef actor = peers.get(i % length).getActor();
+                actor.tell(new RequestValueMsg(msg.request), getSelf());
+            }
+        }
+        else {
+            // TODO implementare meccanismo per coda
+        }
+    }
+
     private void onRequestValueMsg(RequestValueMsg msg) {
-        Item i = values.get(msg.key);
+        Item i = values.get(msg.request.key);
         ActorRef sender = getSender();
-        boolean requestRead = msg.requestRead;
-        sender.tell(new ValueResponseMsg(i, requestRead), getSelf());
+        RequestType requestType = msg.request.type;
+        sender.tell(new ValueResponseMsg(i, msg.request), getSelf());
     }
 
     private void onValueResponseMsg(ValueResponseMsg msg) {
@@ -232,17 +324,18 @@ public abstract class Node extends AbstractActor{
             }
         }
 
-        if(msg.requestRead){    //READ
+        if(msg.request.type == RequestType.Read){    //READ
             if (nResponses >= read_quorum) {
-                currClient.tell(new ReturnValueMsg(currBest), getSelf());
+                msg.request.getClient().tell(new ReturnValueMsg(currBest), getSelf());
                 // TODO bloccare successive risposte per questa richiesta
+                // TODO mandare a tutti i nodi interessati l'ordine di s
             }
         }
         else {                  //WRITE
             if (nResponses >= write_quorum) {
                 //FARE L'UPDATE DI TUTTO
                 //this.values.updateItem(msg.item.value);
-                currClient.tell(new ReturnValueMsg(currBest), getSelf());
+                msg.request.getClient().tell(new ReturnValueMsg(currBest), getSelf());
                 // TODO bloccare successive risposte per questa richiesta
             }
         }
@@ -256,9 +349,12 @@ public abstract class Node extends AbstractActor{
     @Override
     public Receive createReceive() {
         return receiveBuilder()
+                .match(StartMessage.class, this::onStartMessage)
                 .match(GetValueMsg.class, this::onGetValueMsg)
                 //.match(UpdateValueMsg.class, this::onUpdateValueMsg)
                 .match(CreateValueMsg.class, this::onCreateValueMsg)
+                .match(RequestAccessMsg.class, this::onRequestAccessMsg)
+                .match(AccessResponseMsg.class, this::onAccessResponseMsg)
                 .match(RequestValueMsg.class, this::onRequestValueMsg)
                 .match(ValueResponseMsg.class, this::onValueResponseMsg)
                 //.match(ReturnValueMsg.class, this::onReturnValueMsg)  NON CREDO SERVA PERCHE' L'HANDLER DEVE AVERLO IL CLIENT
