@@ -1,20 +1,16 @@
 import akka.actor.*;
 
 public class Request {
-    private int id;
     private int key;
     private Node.RequestType type;
     private ActorRef client;
+    private String newValue;
 
-    public Request(int id, int key, Node.RequestType read, ActorRef client) {
-        this.id = id;
+    public Request(int key, Node.RequestType type, ActorRef client, String newValue) {
         this.key = key;
-        this.type = read;
+        this.type = type;
         this.client = client;
-    }
-    
-    public int getID () {
-        return id;
+        this.newValue = newValue;
     }
 
     public int getKey () {

@@ -1,5 +1,4 @@
 import akka.actor.*;
-import akka.actor.AbstractActor;
 
 import java.io.Serializable;
 import java.util.Hashtable;
@@ -7,6 +6,9 @@ import java.util.List;
 import java.util.ArrayList;
 
 import java.util.Collections;
+
+import java.util.LinkedList;
+import java.util.Queue;
 
 
 public abstract class Node extends AbstractActor{
@@ -24,13 +26,6 @@ public abstract class Node extends AbstractActor{
         Update
     }
 
-    public static class GetValueMsg implements Serializable {
-        public final int key;
-        public GetValueMsg(int key) {
-            this.key = key;
-        }
-    }
-
     /*public static class UpdateValueMsg implements Serializable {
         public final int key;
         public UpdateValueMsg(int key) {
@@ -38,12 +33,19 @@ public abstract class Node extends AbstractActor{
         }
     }*/
 
-    public static class CreateValueMsg implements Serializable {
+    public static class UpdateValueMsg implements Serializable {
         public final int key;
         public final String value;
-        public CreateValueMsg(int key, String value) {
+        public UpdateValueMsg(int key, String value) {
             this.key = key;
             this.value = value;
+        }
+    }
+
+    public static class GetValueMsg implements Serializable {
+        public final int key;
+        public GetValueMsg(int key) {
+            this.key = key;
         }
     }
 
@@ -100,7 +102,7 @@ public abstract class Node extends AbstractActor{
 
     private Request currRequest;
 
-    private ArrayList<Request> requestQueue = new ArrayList<>();
+    private Queue<Request> requestQueue = new LinkedList<>();
 
 
 
@@ -165,29 +167,50 @@ public abstract class Node extends AbstractActor{
         setGroup(msg);
     }
 
-    private void onGetValueMsg(GetValueMsg msg) {
-        System.out.println(msg.key);
-        int key = msg.key;
-        Request newRequest = new Request(0, key, RequestType.Read, getSender()); // TODO scegliere come assegnare id richieste
-
-        int index = getIndexOfFirstNode(key);
+    private void startRequest(Request request){
+        int index = getIndexOfFirstNode(request.getKey());
 
         ActorRef owner = peers.get(index).getActor();
-        owner.tell(new RequestAccessMsg(newRequest), getSelf());
+        owner.tell(new RequestAccessMsg(request), getSelf());
     }
 
-    private void onCreateValueMsg(CreateValueMsg msg){
-        System.out.println(msg.key + " : " + msg.value);
+    private void onGetValueMsg(GetValueMsg msg) {
+        
         int key = msg.key;
-        Request newRequest = new Request(0, key, RequestType.Update, getSender());
+        Request newRequest = new Request(key, RequestType.Read, getSender(), null);
 
-        int index = getIndexOfFirstNode(key);
+        // NESSUNA RICHIESTA IN QUESTO MOMENTO
+        if(this.currRequest == null) {
+            
+            currRequest = newRequest;
+
+            startRequest(currRequest);
+
+        }
+        else {
+            requestQueue.add(newRequest);
+        }
+
+    }
+
+    private void onUpdateValueMsg(UpdateValueMsg msg){
+        
+        int key = msg.key;
+        String value = msg.value;
+        Request newRequest = new Request(key, RequestType.Update, getSender(), value);
 
 
-        for (int i = index; i < N + index; i++) {
-            int length = peers.size();
-            ActorRef actor = peers.get(i % length).getActor();
-            actor.tell(new RequestValueMsg(newRequest), getSelf());
+
+        // NESSUNA RICHIESTA IN QUESTO MOMENTO
+        if(this.currRequest == null) {
+            
+            currRequest = newRequest;
+
+            startRequest(currRequest);
+
+        }
+        else {
+            requestQueue.add(newRequest);
         }
 
     }
@@ -211,10 +234,8 @@ public abstract class Node extends AbstractActor{
         }
     }
 
-    /**
-     * @param msg
-     */
     private void onAccessResponseMsg(AccessResponseMsg msg) {
+        // RICHIESTA SODDISFATTA
         if (msg.accessGranted) {
             int key = msg.request.getKey();
             int index = getIndexOfFirstNode(key);
@@ -224,16 +245,18 @@ public abstract class Node extends AbstractActor{
                 actor.tell(new RequestValueMsg(msg.request), getSelf());
             }
         }
+
+        // RICHIESTA MESSA IN CODA
         else {
-            
-            // TODO implementare meccanismo per coda
+            currRequest = null;
+            requestQueue.add(msg.request);
         }
     }
 
     private void onRequestValueMsg(RequestValueMsg msg) {
-        Item i = values.get(msg.request.getKey());
+        Item i = values.get(msg.request.getType());
         ActorRef sender = getSender();
-        
+        RequestType requestType = msg.request.getType();
         sender.tell(new ValueResponseMsg(i, msg.request), getSelf());
     }
 
@@ -251,6 +274,13 @@ public abstract class Node extends AbstractActor{
         if(msg.request.getType() == RequestType.Read){    //READ
             if (nResponses >= read_quorum) {
                 msg.request.getClient().tell(new ReturnValueMsg(currBest), getSelf());
+                currRequest = null;
+
+                if(!requestQueue.isEmpty()) {
+                    currRequest = requestQueue.remove();
+                    startRequest(currRequest);
+                }
+
                 // TODO bloccare successive risposte per questa richiesta
                 // TODO mandare a tutti i nodi interessati l'ordine di s
             }
@@ -261,6 +291,12 @@ public abstract class Node extends AbstractActor{
                 //this.values.updateItem(msg.item.value);
                 msg.request.getClient().tell(new ReturnValueMsg(currBest), getSelf());
                 // TODO bloccare successive risposte per questa richiesta
+                currRequest = null;
+
+                if(!requestQueue.isEmpty()) {
+                    currRequest = requestQueue.remove();
+                    startRequest(currRequest);
+                }
             }
         }
         
@@ -276,7 +312,7 @@ public abstract class Node extends AbstractActor{
                 .match(StartMessage.class, this::onStartMessage)
                 .match(GetValueMsg.class, this::onGetValueMsg)
                 //.match(UpdateValueMsg.class, this::onUpdateValueMsg)
-                .match(CreateValueMsg.class, this::onCreateValueMsg)
+                .match(UpdateValueMsg.class, this::onUpdateValueMsg)
                 .match(RequestAccessMsg.class, this::onRequestAccessMsg)
                 .match(AccessResponseMsg.class, this::onAccessResponseMsg)
                 .match(RequestValueMsg.class, this::onRequestValueMsg)
