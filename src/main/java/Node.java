@@ -1,4 +1,5 @@
 import akka.actor.*;
+import scala.concurrent.duration.Duration;
 
 import java.io.Serializable;
 import java.util.Hashtable;
@@ -9,9 +10,32 @@ import java.util.Collections;
 
 import java.util.LinkedList;
 import java.util.Queue;
+import java.util.concurrent.TimeUnit;
 
 
 public abstract class Node extends AbstractActor{
+
+    private int id;                                                         // Node ID        
+    private Hashtable<Integer, Item> values = new Hashtable<>();            // list of keys and values
+    private List<Peer> peers = new ArrayList<>();                           // list of peer banks
+
+    private boolean isCoordinator = false;                                  // the node is the coordinator
+
+    private Node next;
+    private Node previous;
+
+    private int nResponses = 0;
+
+    private Request currRequest;
+
+    private ArrayList<Request> activeRequests = new ArrayList<>();
+
+    private Queue<Request> requestQueue = new LinkedList<>();
+
+    public final int N = 4;
+
+    public final int read_quorum = N / 2 + 1;
+    public final int write_quorum = N / 2 + 1;
 
     // Start message that sends the list of participants to everyone
     public static class StartMessage implements Serializable {
@@ -25,13 +49,6 @@ public abstract class Node extends AbstractActor{
         Read,
         Update
     }
-
-    /*public static class UpdateValueMsg implements Serializable {
-        public final int key;
-        public UpdateValueMsg(int key) {
-            this.key = key;
-        }
-    }*/
 
     public static class UpdateValueMsg implements Serializable {
         public final int key;
@@ -96,29 +113,6 @@ public abstract class Node extends AbstractActor{
             this.newVersion = newVersion;
         }
     }
-
-
-    private int id;                                                         // Node ID        
-    private Hashtable<Integer, Item> values = new Hashtable<>();            // list of keys and values
-    private List<Peer> peers = new ArrayList<>();                           // list of peer banks
-
-    private boolean isCoordinator = false;                                  // the node is the coordinator
-
-    private Node next;
-    private Node previous;
-
-    private int nResponses = 0;
-
-    private Request currRequest;
-
-    private ArrayList<Request> activeRequests = new ArrayList<>();
-
-    private Queue<Request> requestQueue = new LinkedList<>();
-
-    public final int N = 4;
-
-    public final int read_quorum = N / 2 + 1;
-    public final int write_quorum = N / 2 + 1;
 
     /*-- Actor constructors --------------------------------------------------- */
     public Node(int id /*boolean isCoordinator, Node next, Node previous*/){
@@ -301,7 +295,7 @@ public abstract class Node extends AbstractActor{
                         activeRequests.add(r);
                         startRequest(r);
                     }
-                }
+                } 
             }
 
         }
@@ -311,8 +305,6 @@ public abstract class Node extends AbstractActor{
         Item newItem = new Item(msg.request.getNewValue(), msg.newVersion);
         this.values.put(msg.request.getKey(), newItem);
     }
-
-
 
 
     @SuppressWarnings("unchecked")

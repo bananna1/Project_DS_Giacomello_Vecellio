@@ -8,6 +8,8 @@ public class Request {
     private Item currBest = null;
     private int nResponses = 0;
 
+    final static int TIMEOUT = 2000;
+
     public Request(int key, Node.RequestType type, ActorRef client, String newValue) {
         this.key = key;
         this.type = type;
