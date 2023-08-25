@@ -5,6 +5,8 @@ public class Request {
     private Node.RequestType type;
     private ActorRef client;
     private String newValue;
+    private Item currBest = null;
+    private int nResponses = 0;
 
     public Request(int key, Node.RequestType type, ActorRef client, String newValue) {
         this.key = key;
@@ -26,5 +28,20 @@ public class Request {
     }
     public ActorRef getClient() {
         return this.client;
+    }
+    public String getNewValue() {
+        return newValue;
+    }
+    public Item getCurrBest() {
+        return currBest;
+    }
+    public void setCurrBest(Item newItem) {
+        currBest = newItem;
+    }
+    public int getnResponses() {
+        return nResponses;
+    }
+    public void incrementnResponses() {
+        nResponses++;
     }
 }

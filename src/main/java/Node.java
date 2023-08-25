@@ -88,6 +88,16 @@ public abstract class Node extends AbstractActor{
         }
     }
 
+    public static class ChangeValueMsg implements Serializable {
+        public final Request request;
+        public final int newVersion;
+        public ChangeValueMsg(Request request, int newVersion) {
+            this.request = request;
+            this.newVersion = newVersion;
+        }
+    }
+
+
     private int id;                                                         // Node ID        
     private Hashtable<Integer, Item> values = new Hashtable<>();            // list of keys and values
     private List<Peer> peers = new ArrayList<>();                           // list of peer banks
@@ -98,15 +108,12 @@ public abstract class Node extends AbstractActor{
     private Node previous;
 
     private int nResponses = 0;
-    private Item currBest = null;
 
     private Request currRequest;
 
+    private ArrayList<Request> activeRequests = new ArrayList<>();
+
     private Queue<Request> requestQueue = new LinkedList<>();
-
-
-
-
 
     public final int N = 4;
 
@@ -179,18 +186,8 @@ public abstract class Node extends AbstractActor{
         int key = msg.key;
         Request newRequest = new Request(key, RequestType.Read, getSender(), null);
 
-        // NESSUNA RICHIESTA IN QUESTO MOMENTO
-        if(this.currRequest == null) {
-            
-            currRequest = newRequest;
-
-            startRequest(currRequest);
-
-        }
-        else {
-            requestQueue.add(newRequest);
-        }
-
+        activeRequests.add(newRequest);
+        startRequest(newRequest);
     }
 
     private void onUpdateValueMsg(UpdateValueMsg msg){
@@ -199,19 +196,8 @@ public abstract class Node extends AbstractActor{
         String value = msg.value;
         Request newRequest = new Request(key, RequestType.Update, getSender(), value);
 
-
-
-        // NESSUNA RICHIESTA IN QUESTO MOMENTO
-        if(this.currRequest == null) {
-            
-            currRequest = newRequest;
-
-            startRequest(currRequest);
-
-        }
-        else {
-            requestQueue.add(newRequest);
-        }
+        activeRequests.add(newRequest);
+        startRequest(newRequest);
 
     }
 
@@ -248,7 +234,7 @@ public abstract class Node extends AbstractActor{
 
         // RICHIESTA MESSA IN CODA
         else {
-            currRequest = null;
+            activeRequests.remove(msg.request);
             requestQueue.add(msg.request);
         }
     }
@@ -261,45 +247,69 @@ public abstract class Node extends AbstractActor{
     }
 
     private void onValueResponseMsg(ValueResponseMsg msg) {
-        nResponses ++;
-        if (currBest == null) {
-            currBest = msg.item;
-        }
-        else {
-            if (msg.item.getVersion() > currBest.getVersion()) {
-                currBest = msg.item;
+        if (activeRequests.contains(msg.request)) {
+            msg.request.incrementnResponses();
+            int nResponses = msg.request.getnResponses();
+            Item currBest = msg.request.getCurrBest();
+            if (currBest == null) {
+                currRequest.setCurrBest(msg.item);
             }
-        }
-
-        if(msg.request.getType() == RequestType.Read){    //READ
-            if (nResponses >= read_quorum) {
-                msg.request.getClient().tell(new ReturnValueMsg(currBest), getSelf());
-                currRequest = null;
-
-                if(!requestQueue.isEmpty()) {
-                    currRequest = requestQueue.remove();
-                    startRequest(currRequest);
-                }
-
-                // TODO bloccare successive risposte per questa richiesta
-                // TODO mandare a tutti i nodi interessati l'ordine di s
-            }
-        }
-        else {                  //WRITE
-            if (nResponses >= write_quorum) {
-                //FARE L'UPDATE DI TUTTO
-                //this.values.updateItem(msg.item.value);
-                msg.request.getClient().tell(new ReturnValueMsg(currBest), getSelf());
-                // TODO bloccare successive risposte per questa richiesta
-                currRequest = null;
-
-                if(!requestQueue.isEmpty()) {
-                    currRequest = requestQueue.remove();
-                    startRequest(currRequest);
+            else {
+                if (msg.item.getVersion() > currBest.getVersion()) {
+                    currBest = msg.item;
                 }
             }
+
+            if(msg.request.getType() == RequestType.Read){    //READ
+                if (nResponses >= read_quorum) {
+                    msg.request.getClient().tell(new ReturnValueMsg(currBest), getSelf());
+
+                    activeRequests.remove(msg.request);
+
+                    int length = requestQueue.size();
+                    for (int i = 0; i < length; i++) {
+                        Request r = requestQueue.remove();
+                        activeRequests.add(r);
+                        startRequest(r);
+                    }
+
+                }
+            }
+            else {                  //WRITE
+                if (nResponses >= write_quorum) {
+
+                    msg.request.getClient().tell(new ReturnValueMsg(currBest), getSelf());
+                    int index = getIndexOfFirstNode(msg.request.getKey());
+                    int newVersion;
+                    if (currBest == null) {
+                        newVersion = 1;
+                    }
+                    else {
+                        newVersion = currBest.getVersion() + 1;
+                    }
+                    for (int i = index; i < N + index; i++) {
+                        int length = peers.size();
+                        ActorRef actor = peers.get(i % length).getActor();
+                        actor.tell(new ChangeValueMsg(msg.request, newVersion), getSelf());
+                    }
+
+                    activeRequests.remove(msg.request);
+
+                    int length = requestQueue.size();
+                    for (int i = 0; i < length; i++) {
+                        Request r = requestQueue.remove();
+                        activeRequests.add(r);
+                        startRequest(r);
+                    }
+                }
+            }
+
         }
-        
+    }
+
+    public void onChangeValueMsg(ChangeValueMsg msg) {
+        Item newItem = new Item(msg.request.getNewValue(), msg.newVersion);
+        this.values.put(msg.request.getKey(), newItem);
     }
 
 
@@ -317,6 +327,7 @@ public abstract class Node extends AbstractActor{
                 .match(AccessResponseMsg.class, this::onAccessResponseMsg)
                 .match(RequestValueMsg.class, this::onRequestValueMsg)
                 .match(ValueResponseMsg.class, this::onValueResponseMsg)
+                .match(ChangeValueMsg.class, this::onChangeValueMsg)
                 //.match(ReturnValueMsg.class, this::onReturnValueMsg)  NON CREDO SERVA PERCHE' L'HANDLER DEVE AVERLO IL CLIENT
                 .build();
     }
