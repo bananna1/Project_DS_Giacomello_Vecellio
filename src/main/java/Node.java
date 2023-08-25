@@ -19,89 +19,9 @@ public abstract class Node extends AbstractActor{
         }
     }
 
-    private class Item {
-        private String value;
-        private int version;
-
-        private boolean lockedUpdate = false;
-        private int nLockedRead = 0;
-
-        public Item (String value, int version) {
-            this.value = value;
-            this.version = version;
-        }
-        public void updateItem (String newValue) {
-            this.value = newValue;
-            this.version ++;
-        }
-        public boolean lockUpdate() {
-            if (this.lockedUpdate || this.nLockedRead > 0) {
-                return false;
-            }
-            this.lockedUpdate = true;
-            return true;
-        }
-        public void unlockUpdate() {
-            this.lockedUpdate = false;
-        }
-        public boolean isLockedUpdate() {
-            return this.lockedUpdate;
-        }
-        public boolean lockRead() {
-            if (this.lockedUpdate) {
-                return false;
-            }
-            nLockedRead ++;
-            return true;
-        }
-        public void unlockRead() {
-            nLockedRead --;
-            if (nLockedRead < 0) { // per sicurezza
-                nLockedRead = 0;
-            }
-        }
-    }
-
-    private class Peer {
-        private ActorRef actor;
-        private int id;
-
-        public Peer(ActorRef actor, int id) {
-            this.actor = actor;
-            this.id = id;
-        }
-        public ActorRef getActor() {
-            return this.actor;
-        }
-
-        public int getID() {
-            return this.id;
-        }
-    }
-
     public enum RequestType {
         Read,
         Update
-    }
-
-    private class Request {
-        private int id;
-        private int key;
-        private RequestType type;
-        private ActorRef client;
-
-        public Request(int id, int key, RequestType type, ActorRef client) {
-            this.id = id;
-            this.key = key;
-            this.type = type;
-            this.client = client;
-        }
-        public void setClient(ActorRef client) { // FORSE NON SERVE
-            this.client = client;
-        }
-        public ActorRef getClient() {
-            return this.client;
-        }
     }
 
     public static class GetValueMsg implements Serializable {
@@ -273,10 +193,10 @@ public abstract class Node extends AbstractActor{
     }
 
     private void onRequestAccessMsg(RequestAccessMsg msg) {
-        Item i = values.get(msg.request.key);
+        Item i = values.get(msg.request.getKey());
         ActorRef coordinator = getSender();
         boolean accessGranted;
-        if (msg.request.type == RequestType.Read) {
+        if (msg.request.getType() == RequestType.Read) {
             accessGranted = i.lockRead();
         }
         else {
@@ -291,9 +211,12 @@ public abstract class Node extends AbstractActor{
         }
     }
 
+    /**
+     * @param msg
+     */
     private void onAccessResponseMsg(AccessResponseMsg msg) {
         if (msg.accessGranted) {
-            int key = msg.request.key;
+            int key = msg.request.getKey();
             int index = getIndexOfFirstNode(key);
             for (int i = index; i < N + index; i++) {
                 int length = peers.size();
@@ -302,14 +225,15 @@ public abstract class Node extends AbstractActor{
             }
         }
         else {
+            
             // TODO implementare meccanismo per coda
         }
     }
 
     private void onRequestValueMsg(RequestValueMsg msg) {
-        Item i = values.get(msg.request.key);
+        Item i = values.get(msg.request.getKey());
         ActorRef sender = getSender();
-        RequestType requestType = msg.request.type;
+        
         sender.tell(new ValueResponseMsg(i, msg.request), getSelf());
     }
 
@@ -319,12 +243,12 @@ public abstract class Node extends AbstractActor{
             currBest = msg.item;
         }
         else {
-            if (msg.item.version > currBest.version) {
+            if (msg.item.getVersion() > currBest.getVersion()) {
                 currBest = msg.item;
             }
         }
 
-        if(msg.request.type == RequestType.Read){    //READ
+        if(msg.request.getType() == RequestType.Read){    //READ
             if (nResponses >= read_quorum) {
                 msg.request.getClient().tell(new ReturnValueMsg(currBest), getSelf());
                 // TODO bloccare successive risposte per questa richiesta
