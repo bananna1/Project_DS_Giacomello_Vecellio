@@ -1,16 +1,25 @@
 import akka.actor.*;
+import scala.concurrent.duration.Duration;
+
+import java.io.Serializable;
+import java.util.concurrent.TimeUnit;
 
 public class Request {
     private int key;
     private Node.RequestType type;
     private ActorRef client;
+    private ActorRef coordinator;
     private String newValue;
     private Item currBest = null;
     private int nResponses = 0;
 
+<<<<<<< Updated upstream
     final static int TIMEOUT = 2000;
 
     public Request(int key, Node.RequestType type, ActorRef client, String newValue) {
+=======
+    public Request(int key, Node.RequestType type, ActorRef client, ActorRef coordinator, String newValue) {
+>>>>>>> Stashed changes
         this.key = key;
         this.type = type;
         this.client = client;
@@ -46,4 +55,5 @@ public class Request {
     public void incrementnResponses() {
         nResponses++;
     }
+
 }

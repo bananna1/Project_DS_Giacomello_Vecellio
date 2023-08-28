@@ -55,6 +55,14 @@ public abstract class Node extends AbstractActor{
         }
     }
 
+    public static class Timeout implements Serializable {
+        Request request;
+
+        public Timeout(Request request) {
+            this.request = request;
+        }
+    }
+
     public static class UpdateValueMsg implements Serializable {
         public final int key;
         public final String value;
@@ -194,7 +202,7 @@ public abstract class Node extends AbstractActor{
     private void onGetValueMsg(GetValueMsg msg) {
         
         int key = msg.key;
-        Request newRequest = new Request(key, RequestType.Read, getSender(), null);
+        Request newRequest = new Request(key, RequestType.Read, getSender(), getSelf(), null);
 
         activeRequests.add(newRequest);
         startRequest(newRequest);
@@ -204,7 +212,7 @@ public abstract class Node extends AbstractActor{
         
         int key = msg.key;
         String value = msg.value;
-        Request newRequest = new Request(key, RequestType.Update, getSender(), value);
+        Request newRequest = new Request(key, RequestType.Update, getSender(), getSelf(), value);
 
         activeRequests.add(newRequest);
         startRequest(newRequest);
@@ -229,6 +237,8 @@ public abstract class Node extends AbstractActor{
             coordinator.tell(new AccessResponseMsg(false, msg.request), getSelf());
         }
     }
+
+
 
     private void onAccessResponseMsg(AccessResponseMsg msg) {
         // RICHIESTA SODDISFATTA
