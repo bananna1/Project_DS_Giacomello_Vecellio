@@ -32,6 +32,7 @@ public abstract class Node extends AbstractActor{
 
     public final int N = 4;
 
+    public final int TIMEOUT_REQUEST = 5000;
     public final int read_quorum = N / 2 + 1;
     public final int write_quorum = N / 2 + 1;
 
@@ -46,13 +47,6 @@ public abstract class Node extends AbstractActor{
     public enum RequestType {
         Read,
         Update
-    }
-
-    public static class Timeout implements Serializable {
-        Request request;
-        public Timeout(Request request) {
-            this.request = request;
-        }
     }
 
     public static class UpdateValueMsg implements Serializable {
@@ -123,6 +117,13 @@ public abstract class Node extends AbstractActor{
         public final String error;
         public ErrorMsg(String error) {
             this.error = error;
+        }
+    }
+
+    public static class Timeout implements Serializable {
+        public final int id_request;
+        public Timeout(int id_request) {
+            this.id_request = id_request;
         }
     }
 
@@ -197,6 +198,7 @@ public abstract class Node extends AbstractActor{
         Request newRequest = new Request(key, RequestType.Read, getSender(), null);
 
         activeRequests.add(newRequest);
+        setTimeout(TIMEOUT_REQUEST, newRequest.getID());
         startRequest(newRequest);
     }
 
@@ -207,6 +209,7 @@ public abstract class Node extends AbstractActor{
         Request newRequest = new Request(key, RequestType.Update, getSender(), value);
 
         activeRequests.add(newRequest);
+        setTimeout(TIMEOUT_REQUEST, newRequest.getID());
         startRequest(newRequest);
 
     }
@@ -322,11 +325,11 @@ public abstract class Node extends AbstractActor{
         this.values.put(msg.request.getKey(), newItem);
     }
 
-    void setTimeout(int time, Request request) {
+    void setTimeout(int time, int id_request) {
         getContext().system().scheduler().scheduleOnce(
                 Duration.create(time, TimeUnit.MILLISECONDS),
                 getSelf(),
-                new Timeout(request), // the message to send
+                new Timeout(id_request), // the message to send
                 getContext().system().dispatcher(), getSelf()
         );
     }
@@ -336,8 +339,30 @@ public abstract class Node extends AbstractActor{
         RIMUOVERE RICHIESTA DALLE ACTIVE REQUESTS
         MANDARE MESSAGGIO ERRORE AL CLIENT
          */
-        activeRequests.remove(msg.request);
-        msg.request.getClient().tell(new ErrorMsg("Your request took too much to be satisfied"), getSelf());
+        Request request = null;
+        for (Request r : this.activeRequests) {
+
+            int i = r.getID();
+            if (i == msg.id_request) {
+                request = r;
+                break;
+            }
+        }
+        if (request != null) {
+            if (request.getType() == RequestType.Read) {
+                if (request.getnResponses() < read_quorum) {
+                    activeRequests.remove(request);
+                    request.getClient().tell(new ErrorMsg("Your Read request " + msg.id_request + " took too much to be satisfied"), getSelf());
+                }
+            }
+            else {
+                if (request.getnResponses() < write_quorum) {
+                    activeRequests.remove(request);
+                    request.getClient().tell(new ErrorMsg("Your Update request " + msg.id_request +  " took too much to be satisfied"), getSelf());
+                }
+            }
+        }
+
 
     }
 

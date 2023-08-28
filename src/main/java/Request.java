@@ -7,14 +7,14 @@ public class Request {
     private String newValue;
     private Item currBest = null;
     private int nResponses = 0;
-
-    final static int TIMEOUT = 2000;
+    private static int id = 0;
 
     public Request(int key, Node.RequestType type, ActorRef client, String newValue) {
         this.key = key;
         this.type = type;
         this.client = client;
         this.newValue = newValue;
+        this.id ++;
     }
 
     public int getKey () {
@@ -36,6 +36,9 @@ public class Request {
     }
     public Item getCurrBest() {
         return currBest;
+    }
+    public int getID() {
+        return id;
     }
     public void setCurrBest(Item newItem) {
         currBest = newItem;
