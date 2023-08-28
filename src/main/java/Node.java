@@ -150,7 +150,6 @@ public abstract class Node extends AbstractActor{
     public void updateNext(Node newNext) {
         this.previous = newNext;
     }
-
     private int getIndexOfFirstNode (int key) {
         int index = 0;
         for (int i = 0; i < peers.size(); i++) {
