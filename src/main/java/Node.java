@@ -15,14 +15,12 @@ import java.util.concurrent.TimeUnit;
 
 public abstract class Node extends AbstractActor{
 
-    private int id;                                                         // Node ID        
+    private int id;                                                         // Node ID
+    private ActorRef actor;
     private Hashtable<Integer, Item> values = new Hashtable<>();            // list of keys and values
-    private List<Peer> peers = new ArrayList<>();                           // list of peer banks
+    private List<Node> peers = new ArrayList<>();                           // list of peer banks
 
     private boolean isCoordinator = false;                                  // the node is the coordinator
-
-    private Node next;
-    private Node previous;
 
     private int nResponses = 0;
 
@@ -39,8 +37,8 @@ public abstract class Node extends AbstractActor{
 
     // Start message that sends the list of participants to everyone
     public static class StartMessage implements Serializable {
-        public final List<Peer> group;
-        public StartMessage(List<Peer> group) {
+        public final List<Node> group;
+        public StartMessage(List<Node> group) {
               this.group = Collections.unmodifiableList(new ArrayList<>(group));
         }
     }
@@ -132,6 +130,7 @@ public abstract class Node extends AbstractActor{
     public Node(int id /*boolean isCoordinator, Node next, Node previous*/){
         super();
         this.id = id;
+
         /*
         this.next = next;
         this.previous = previous;
@@ -139,6 +138,9 @@ public abstract class Node extends AbstractActor{
     }
     public int getID() {
         return this.id;
+    }
+    public ActorRef getActor() {
+        return this.actor;
     }
     public void removeValue (int key) {
         values.remove(key);
@@ -150,11 +152,12 @@ public abstract class Node extends AbstractActor{
 
     void setGroup(StartMessage sm) {
         peers = new ArrayList<>();
-        for (Peer b: sm.group) {
+        for (Node b: sm.group) {
             this.peers.add(b);
         }
         //print("starting with " + sm.group.size() + " peer(s)");
     }
+    /*
     public void updatePrevious(Node newPrev) {
         this.previous = newPrev;
     }
@@ -162,6 +165,7 @@ public abstract class Node extends AbstractActor{
     public void updateNext(Node newNext) {
         this.previous = newNext;
     }
+     */
 
     private int getIndexOfFirstNode (int key) {
         int index = 0;
