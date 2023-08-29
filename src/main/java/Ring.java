@@ -327,11 +327,9 @@ public class Ring {
         }
 
         public void onTimeout(Timeout msg) {
-            /*
-            RIMUOVERE RICHIESTA DALLE ACTIVE REQUESTS
-            MANDARE MESSAGGIO ERRORE AL CLIENT
-            */
             Request request = null;
+
+            // check if the request is in the active requests
             for (Request r : this.activeRequests) {
                 int i = r.getID();
                 if (i == msg.id_request) {
@@ -339,7 +337,16 @@ public class Ring {
                     break;
                 }
             }
-            if (request != null) {
+            if (request == null) {
+                for (Request r : this.requestQueue) {
+                    int i = r.getID();
+                    if (i == msg.id_request) {
+                        request = r;
+                        break;
+                    }
+                }
+            }
+            else {
                 if (request.getType() == RequestType.Read) {
                     if (request.getnResponses() < read_quorum) {
                         activeRequests.remove(request);
@@ -353,8 +360,6 @@ public class Ring {
                     }
                 }
             }
-
-
         }
 
         static public Props props(int id) {

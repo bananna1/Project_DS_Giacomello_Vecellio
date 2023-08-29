@@ -8,12 +8,12 @@ import java.util.ArrayList;
 import java.util.Collections;
 
 
-public class Peer extends Node{
+public class Peer {
         private ActorRef actor;
         private int id;
         
         public Peer(int id) {
-            super(id);
+            this.id = id;
         }
 
         public ActorRef getActor() {
@@ -24,7 +24,4 @@ public class Peer extends Node{
             return this.id;
         }
 
-        static public Props props(int id) {
-            return Props.create(Peer.class, () -> new Peer(id));
-          }
 }
