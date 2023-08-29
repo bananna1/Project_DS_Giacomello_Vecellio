@@ -341,7 +341,6 @@ public abstract class Node extends AbstractActor{
          */
         Request request = null;
         for (Request r : this.activeRequests) {
-
             int i = r.getID();
             if (i == msg.id_request) {
                 request = r;
