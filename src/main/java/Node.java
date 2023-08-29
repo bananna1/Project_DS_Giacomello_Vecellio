@@ -15,12 +15,14 @@ import java.util.concurrent.TimeUnit;
 
 public abstract class Node extends AbstractActor{
 
-    private int id;                                                         // Node ID
-    private ActorRef actor;
+    private int id;                                                         // Node ID        
     private Hashtable<Integer, Item> values = new Hashtable<>();            // list of keys and values
-    private List<Node> peers = new ArrayList<>();                           // list of peer banks
+    private List<Peer> peers = new ArrayList<>();                           // list of peer banks
 
     private boolean isCoordinator = false;                                  // the node is the coordinator
+
+    private Node next;
+    private Node previous;
 
     private int nResponses = 0;
 
@@ -32,14 +34,13 @@ public abstract class Node extends AbstractActor{
 
     public final int N = 4;
 
-    public final int TIMEOUT_REQUEST = 5000;
     public final int read_quorum = N / 2 + 1;
     public final int write_quorum = N / 2 + 1;
 
     // Start message that sends the list of participants to everyone
     public static class StartMessage implements Serializable {
-        public final List<Node> group;
-        public StartMessage(List<Node> group) {
+        public final List<Peer> group;
+        public StartMessage(List<Peer> group) {
               this.group = Collections.unmodifiableList(new ArrayList<>(group));
         }
     }
@@ -113,36 +114,20 @@ public abstract class Node extends AbstractActor{
         }
     }
 
-    public static class ErrorMsg implements Serializable {
-        public final String error;
-        public ErrorMsg(String error) {
-            this.error = error;
-        }
-    }
-
-    public static class Timeout implements Serializable {
-        public final int id_request;
-        public Timeout(int id_request) {
-            this.id_request = id_request;
-        }
-    }
-
     /*-- Actor constructors --------------------------------------------------- */
     public Node(int id /*boolean isCoordinator, Node next, Node previous*/){
         super();
         this.id = id;
-
         /*
         this.next = next;
         this.previous = previous;
          */
     }
+
     public int getID() {
         return this.id;
     }
-    public ActorRef getActor() {
-        return this.actor;
-    }
+
     public void removeValue (int key) {
         values.remove(key);
     }
@@ -153,12 +138,11 @@ public abstract class Node extends AbstractActor{
 
     void setGroup(StartMessage sm) {
         peers = new ArrayList<>();
-        for (Node b: sm.group) {
+        for (Peer b: sm.group) {
             this.peers.add(b);
         }
         //print("starting with " + sm.group.size() + " peer(s)");
     }
-    /*
     public void updatePrevious(Node newPrev) {
         this.previous = newPrev;
     }
@@ -166,8 +150,6 @@ public abstract class Node extends AbstractActor{
     public void updateNext(Node newNext) {
         this.previous = newNext;
     }
-     */
-
     private int getIndexOfFirstNode (int key) {
         int index = 0;
         for (int i = 0; i < peers.size(); i++) {
@@ -198,7 +180,6 @@ public abstract class Node extends AbstractActor{
         Request newRequest = new Request(key, RequestType.Read, getSender(), null);
 
         activeRequests.add(newRequest);
-        setTimeout(TIMEOUT_REQUEST, newRequest.getID());
         startRequest(newRequest);
     }
 
@@ -209,7 +190,6 @@ public abstract class Node extends AbstractActor{
         Request newRequest = new Request(key, RequestType.Update, getSender(), value);
 
         activeRequests.add(newRequest);
-        setTimeout(TIMEOUT_REQUEST, newRequest.getID());
         startRequest(newRequest);
 
     }
@@ -308,8 +288,8 @@ public abstract class Node extends AbstractActor{
 
                     activeRequests.remove(msg.request);
 
-                    // TODO controllare che il while non sia un problema e in caso rimettere il for
-                    while(!requestQueue.isEmpty()) {
+                    int length = requestQueue.size();
+                    for (int i = 0; i < length; i++) {
                         Request r = requestQueue.remove();
                         activeRequests.add(r);
                         startRequest(r);
@@ -323,46 +303,6 @@ public abstract class Node extends AbstractActor{
     public void onChangeValueMsg(ChangeValueMsg msg) {
         Item newItem = new Item(msg.request.getNewValue(), msg.newVersion);
         this.values.put(msg.request.getKey(), newItem);
-    }
-
-    void setTimeout(int time, int id_request) {
-        getContext().system().scheduler().scheduleOnce(
-                Duration.create(time, TimeUnit.MILLISECONDS),
-                getSelf(),
-                new Timeout(id_request), // the message to send
-                getContext().system().dispatcher(), getSelf()
-        );
-    }
-
-    public void onTimeout(Timeout msg) {
-        /*
-        RIMUOVERE RICHIESTA DALLE ACTIVE REQUESTS
-        MANDARE MESSAGGIO ERRORE AL CLIENT
-         */
-        Request request = null;
-        for (Request r : this.activeRequests) {
-            int i = r.getID();
-            if (i == msg.id_request) {
-                request = r;
-                break;
-            }
-        }
-        if (request != null) {
-            if (request.getType() == RequestType.Read) {
-                if (request.getnResponses() < read_quorum) {
-                    activeRequests.remove(request);
-                    request.getClient().tell(new ErrorMsg("Your Read request " + msg.id_request + " took too much to be satisfied"), getSelf());
-                }
-            }
-            else {
-                if (request.getnResponses() < write_quorum) {
-                    activeRequests.remove(request);
-                    request.getClient().tell(new ErrorMsg("Your Update request " + msg.id_request +  " took too much to be satisfied"), getSelf());
-                }
-            }
-        }
-
-
     }
 
 
@@ -379,7 +319,6 @@ public abstract class Node extends AbstractActor{
                 .match(RequestValueMsg.class, this::onRequestValueMsg)
                 .match(ValueResponseMsg.class, this::onValueResponseMsg)
                 .match(ChangeValueMsg.class, this::onChangeValueMsg)
-                .match(Timeout.class, this::onTimeout)
                 //.match(ReturnValueMsg.class, this::onReturnValueMsg)  NON CREDO SERVA PERCHE' L'HANDLER DEVE AVERLO IL CLIENT
                 .build();
     }
