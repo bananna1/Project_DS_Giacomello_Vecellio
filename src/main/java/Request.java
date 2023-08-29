@@ -2,14 +2,14 @@ import akka.actor.*;
 
 public class Request {
     private int key;
-    private Node.RequestType type;
+    private Ring.Node.RequestType type;
     private ActorRef client;
     private String newValue;
     private Item currBest = null;
     private int nResponses = 0;
     private static int id = 0;
 
-    public Request(int key, Node.RequestType type, ActorRef client, String newValue) {
+    public Request(int key, Ring.Node.RequestType type, ActorRef client, String newValue) {
         this.key = key;
         this.type = type;
         this.client = client;
@@ -21,7 +21,7 @@ public class Request {
         return key;
     }
     
-    public Node.RequestType getType () {
+    public Ring.Node.RequestType getType () {
         return type;
     }
 
