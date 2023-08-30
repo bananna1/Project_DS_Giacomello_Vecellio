@@ -8,14 +8,16 @@ public class Request {
     private String newValue;
     private Item currBest = null;
     private int nResponses = 0;
-    private static int id = 0;
+    private int okResponses = 0;
+    private int id = 0;
+    private static int count = 0;
 
     public Request(int key, Ring.Node.RequestType type, ActorRef client, String newValue) {
         this.key = key;
         this.type = type;
         this.client = client;
         this.newValue = newValue;
-        this.id ++;
+        this.id = ++count;
     }
 
     public int getKey () {
@@ -30,7 +32,7 @@ public class Request {
         this.client = client;
     }
     public ActorRef getClient() {
-        return this.client;
+        return client;
     }
     public String getNewValue() {
         return newValue;
@@ -50,11 +52,16 @@ public class Request {
     public void incrementnResponses() {
         nResponses++;
     }
-    public void resetnResponses() {
-        nResponses = 0;
+    public int getOkResponses() {
+        return okResponses;
+    }
+    public void incrementOkResponses() {
+        okResponses ++;
     }
     public void setOwner(ActorRef owner) {
         this.owner = owner;
     }
-
+    public ActorRef getOwner() {
+        return owner;
+    }
 }

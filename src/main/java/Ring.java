@@ -97,6 +97,20 @@ public class Ring {
         }
     }
 
+    public static class UnlockMsg implements Serializable {
+        public final Request request;
+        public UnlockMsg(Request request) {
+            this.request = request;
+        }
+    }
+
+    public static class OkMsg implements Serializable {
+        public final Request request;
+        public OkMsg(Request request) {
+            this.request = request;
+        }
+    }
+
     public static class ErrorMsg implements Serializable {
         public final String error;
         public ErrorMsg(String error) {
@@ -334,8 +348,8 @@ public class Ring {
                             msg.request.getClient().tell(new ReturnValueMsg(currBest, msg.request.getID(), msg.request.getType()), getSelf());
                         }
 
-
                         activeRequests.remove(msg.request);
+                        msg.request.getOwner().tell(new UnlockMsg(msg.request), getSelf());
 
                         int length = requestQueue.size();
                         for (int i = 0; i < length; i++) {
@@ -349,6 +363,7 @@ public class Ring {
                 else {                  //WRITE
                     if (nResponses >= write_quorum) {
                         // TODO ritornare solo messaggio di ok
+                        System.out.println("HO RAGGIUNTO IL WRITE QUORUM");
                         msg.request.getClient().tell(new ReturnValueMsg(currBest, msg.request.getID(), msg.request.getType()), getSelf());
                         int index = getIndexOfFirstNode(msg.request.getKey());
                         int newVersion;
@@ -359,7 +374,7 @@ public class Ring {
                             newVersion = currBest.getVersion() + 1;
                             System.out.println("STO AGGIORNANDO LA VERSIONE " + newVersion);
                         }
-                        msg.request.resetnResponses();
+
                         for (int i = index; i < N + index; i++) {
                             int length = peers.size();
                             ActorRef actor = peers.get(i % length).getActor();
@@ -367,7 +382,7 @@ public class Ring {
                         }
 
                         //activeRequests.remove(msg.request);
-                        // AGGIUNGO UN PASSAGGIO IN CUI
+                        // AGGIUNGO UN PASSAGGIO IN CUI ATTENDO CHE I NODI MI RISPONDANO OK PER L'UPDATE IN MODO DA POTER FARE L'UNLOCK DELL'ITEM NELL'OWNER
 
                         // TODO controllare che il while non sia un problema e in caso rimettere il for
                         while(!requestQueue.isEmpty()) {
@@ -384,6 +399,30 @@ public class Ring {
         public void onChangeValueMsg(ChangeValueMsg msg) {
             Item newItem = new Item(msg.request.getNewValue(), msg.newVersion);
             this.storage.put(msg.request.getKey(), newItem);
+            System.out.println("New item - key: " + msg.request.getKey() + ", new value: " + storage.get(msg.request.getKey()).getValue() + ", current version: " + storage.get(msg.request.getKey()).getVersion());
+            getSender().tell(new OkMsg(msg.request), getSelf());
+        }
+
+        public void onUnlockMsg(UnlockMsg msg) {
+            int key = msg.request.getKey();
+            if (msg.request.getType() == RequestType.Read) {
+                this.storage.get(key).unlockRead();
+            }
+            else {
+                this.storage.get(key).unlockUpdate();
+            }
+            System.out.println("Ho fatto l'unlock della richiesta " + msg.request.getType() + " " + msg.request.getID() + " chiave " + msg.request.getKey());
+        }
+
+        public void onOkMsg(OkMsg msg) {
+            // Nota: OkMsg riguarda solo le update requests, quindi non serve differenziare i casi in base al tipo di richiesta
+            if (activeRequests.contains(msg.request)) {
+                msg.request.incrementOkResponses();
+                if (msg.request.getOkResponses() >= write_quorum) {
+                    msg.request.getOwner().tell(new UnlockMsg(msg.request), getSelf());
+                    this.activeRequests.remove(msg.request);
+                }
+            }
         }
 
         void setTimeout(int time, int id_request) {
@@ -442,7 +481,6 @@ public class Ring {
             return receiveBuilder()
                     .match(StartMessage.class, this::onStartMessage)
                     .match(GetValueMsg.class, this::onGetValueMsg)
-                    //.match(UpdateValueMsg.class, this::onUpdateValueMsg)
                     .match(UpdateValueMsg.class, this::onUpdateValueMsg)
                     .match(RequestAccessMsg.class, this::onRequestAccessMsg)
                     .match(AccessResponseMsg.class, this::onAccessResponseMsg)
@@ -450,6 +488,8 @@ public class Ring {
                     .match(ValueResponseMsg.class, this::onValueResponseMsg)
                     .match(ChangeValueMsg.class, this::onChangeValueMsg)
                     .match(Timeout.class, this::onTimeout)
+                    .match(UnlockMsg.class, this::onUnlockMsg)
+                    .match(OkMsg.class, this::onOkMsg)
                     //.match(ReturnValueMsg.class, this::onReturnValueMsg)  NON CREDO SERVA PERCHE' L'HANDLER DEVE AVERLO IL CLIENT
                     .build();
         }
