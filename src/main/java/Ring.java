@@ -15,9 +15,14 @@ import java.util.concurrent.TimeUnit;
 public class Ring {
     // Start message that sends the list of participants to everyone
     public static class StartMessage implements Serializable {
-        public final List<Node> group;
-        public StartMessage(List<Node> group) {
+        public final List<Peer> group;
+        public final List<Integer> keys;
+        public final List<String> values;
+
+        public StartMessage(List<Peer> group, List<Integer> keys, List<String> values) {
               this.group = Collections.unmodifiableList(new ArrayList<>(group));
+              this.keys = Collections.unmodifiableList(new ArrayList<>(keys));
+              this.values = Collections.unmodifiableList(new ArrayList<>(values));
         }
     }
 
@@ -105,7 +110,7 @@ public class Ring {
         private int id;                                                         // Node ID
         private ActorRef actor;
         private Hashtable<Integer, Item> values = new Hashtable<>();            // list of keys and values
-        private List<Node> peers = new ArrayList<>();                           // list of peer banks
+        private List<Peer> peers = new ArrayList<>();                       // list of peer banks
 
         private boolean isCoordinator = false;                                  // the node is the coordinator
 
@@ -154,7 +159,7 @@ public class Ring {
 
         void setGroup(StartMessage sm) {
             peers = new ArrayList<>();
-            for (Node b: sm.group) {
+            for (Peer b: sm.group) {
                 this.peers.add(b);
             }
             //print("starting with " + sm.group.size() + " peer(s)");
@@ -173,8 +178,19 @@ public class Ring {
             return index;
         }
 
+        private void setInitialStorage(List<Integer> keys, List<String> values){
+            for(int i = 0; i < keys.size(); i++) {
+                int index = getIndexOfFirstNode(keys.get(i));
+
+                if((index + this.id) % peers.size() < N) {
+                    this.values.put(keys.get(i), new Item(values.get(i), 1));
+                }
+            }
+        }
+
         public void onStartMessage(StartMessage msg) {
             setGroup(msg);
+            setInitialStorage(msg.keys, msg.values);
         }
 
         private void startRequest(Request request){
@@ -363,7 +379,7 @@ public class Ring {
         }
 
         static public Props props(int id) {
-            return Props.create(Node.class, new Node(id));
+            return Props.create(Node.class, () -> new Node(id));
         }
 
 
