@@ -168,7 +168,7 @@ public class Ring {
         private int getIndexOfFirstNode (int key) {
             int index = 0;
             for (int i = 0; i < peers.size(); i++) {
-                if (peers.get(i).getID() > key) {
+                if (peers.get(i).getID() >= key) {
                     index = i;
                     break;
                     // If we're not able to find a node whose ID is greater than the key,

@@ -46,6 +46,7 @@ public class DHTSystem {
         for (Peer peer: group) {
             peer.getActor().tell(start, null);
         }
+        System.out.println("CIAOOOOOOOOOO");
 
         try {
             System.out.println(">>> Press ENTER to exit <<<");
