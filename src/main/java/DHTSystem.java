@@ -12,7 +12,7 @@ public class DHTSystem {
 
     public static void main(String[] args) {
         // Create the actor system
-        final ActorSystem system = ActorSystem.create("DHT System Initialization");
+        final ActorSystem system = ActorSystem.create("DHT_System");
 
         // Create the nodes
         List<ActorRef> group = new ArrayList<>();
