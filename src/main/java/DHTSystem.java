@@ -10,7 +10,7 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public class DHTSystem {
     final static int N_PARTICIPANTS = 6;
-    final static int N_ITEM = 10;
+    final static int N_ITEM = 4;
 
     private static char randomChar() {
         Random r = new Random();
@@ -32,21 +32,45 @@ public class DHTSystem {
         List<String> values = new ArrayList<>();
 
         // Create the initial key-value storage
+        int key_prova_1 = 0;
+        int key_prova_2 = 0;
+
         for(int i=1; i<=N_ITEM; i++){
 
             int key = ThreadLocalRandom.current().nextInt(0, (N_PARTICIPANTS*10+5)  + 1);
             keys.add(key);
-
+            if (i == 1) {
+                key_prova_1 = key;
+            }
+            if (i == 2) {
+                key_prova_2 = key;
+            }
             char value = randomChar();
             values.add(value + "");
         }
 
         // Send start messages to the participants to inform them of the group and to create the initial storage
         Ring.StartMessage start = new Ring.StartMessage(group, keys, values);
+
         for (Peer peer: group) {
+            
             peer.getActor().tell(start, null);
         }
         System.out.println("CIAOOOOOOOOOO");
+
+        ActorRef client1 = system.actorOf(Client.props(1));
+        ActorRef client2 = system.actorOf(Client.props(2));
+        ActorRef client3 = system.actorOf(Client.props(3));
+
+        System.out.println("Client 1 richiede chiave " + key_prova_1);
+        System.out.println("Client 2 richiede chiave " + key_prova_1);
+        System.out.println("Client 3 richiede chiave " + key_prova_2);
+
+        group.get(2).getActor().tell(new Ring.GetValueMsg(key_prova_1), client1);
+        group.get(2).getActor().tell(new Ring.GetValueMsg(key_prova_2), client3);
+        group.get(2).getActor().tell(new Ring.UpdateValueMsg(key_prova_1, "CACCA"), client3);
+        group.get(4).getActor().tell(new Ring.GetValueMsg(key_prova_1), client2);
+
 
         try {
             System.out.println(">>> Press ENTER to exit <<<");

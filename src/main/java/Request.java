@@ -4,6 +4,7 @@ public class Request {
     private int key;
     private Ring.Node.RequestType type;
     private ActorRef client;
+    private ActorRef owner;
     private String newValue;
     private Item currBest = null;
     private int nResponses = 0;
@@ -49,4 +50,11 @@ public class Request {
     public void incrementnResponses() {
         nResponses++;
     }
+    public void resetnResponses() {
+        nResponses = 0;
+    }
+    public void setOwner(ActorRef owner) {
+        this.owner = owner;
+    }
+
 }
