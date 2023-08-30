@@ -1,3 +1,4 @@
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import akka.actor.ActorRef;
@@ -46,7 +47,12 @@ public class DHTSystem {
             peer.getActor().tell(start, null);
         }
 
-        System.out.println("Ciao");
+        try {
+            System.out.println(">>> Press ENTER to exit <<<");
+            System.in.read();
+        } 
+        catch (IOException ignored) {}
+        system.terminate();
 
     }
 }
