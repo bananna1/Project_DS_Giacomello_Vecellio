@@ -10,7 +10,7 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public class DHTSystem {
     final static int N_PARTICIPANTS = 6;
-    final static int N_ITEM = 10;
+    final static int N_ITEM = 4;
 
     private static char randomChar() {
         Random r = new Random();
@@ -44,8 +44,11 @@ public class DHTSystem {
         // Send start messages to the participants to inform them of the group and to create the initial storage
         Ring.StartMessage start = new Ring.StartMessage(group, keys, values);
         for (Peer peer: group) {
+            
             peer.getActor().tell(start, null);
         }
+
+
 
         try {
             System.out.println(">>> Press ENTER to exit <<<");

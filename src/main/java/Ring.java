@@ -12,6 +12,9 @@ import java.util.LinkedList;
 import java.util.Queue;
 import java.util.concurrent.TimeUnit;
 
+import java.util.*;
+import java.util.Enumeration;
+
 public class Ring {
     // Start message that sends the list of participants to everyone
     public static class StartMessage implements Serializable {
@@ -109,12 +112,8 @@ public class Ring {
 
         private int id;                                                         // Node ID
         private ActorRef actor;
-        private Hashtable<Integer, Item> values = new Hashtable<>();            // list of keys and values
+        private Hashtable<Integer, Item> storage = new Hashtable<>();            // list of keys and values
         private List<Peer> peers = new ArrayList<>();                       // list of peer banks
-
-        private boolean isCoordinator = false;                                  // the node is the coordinator
-
-        private int nResponses = 0;
 
         private Request currRequest;
 
@@ -150,11 +149,11 @@ public class Ring {
             return this.actor;
         }
         public void removeValue (int key) {
-            values.remove(key);
+            storage.remove(key);
         }
 
         public void addValue (int key, String value, int version) {
-            values.put(key, new Item(value, version));
+            storage.put(key, new Item(value, version));
         }
 
         void setGroup(StartMessage sm) {
@@ -166,31 +165,64 @@ public class Ring {
         }
 
         private int getIndexOfFirstNode (int key) {
-            int index = 0;
+            int index = peers.get(0).getID();
+
             for (int i = 0; i < peers.size(); i++) {
-                if (peers.get(i).getID() > key) {
-                    index = i;
+                if (peers.get(i).getID() >= key) {
+                    index = peers.get(i).getID();
                     break;
                     // If we're not able to find a node whose ID is greater than the key,
                     // then the first node to store the value is necessarily the node with the lowest ID (aka index = 0)
                 }
             }
+
             return index;
         }
+
+        
 
         private void setInitialStorage(List<Integer> keys, List<String> values){
             for(int i = 0; i < keys.size(); i++) {
                 int index = getIndexOfFirstNode(keys.get(i));
 
+                //System.out.println(keys.get(i) + " " + index);
+
                 if((index + this.id) % peers.size() < N) {
-                    this.values.put(keys.get(i), new Item(values.get(i), 1));
+                    this.storage.put(keys.get(i), new Item(values.get(i), 1));
                 }
             }
+            
+            printNode();
+
+        }
+
+        private void printNode(){
+            //System.out.print(id + ": {");
+            String printString = id + ": {";
+
+            // Creating  Enumeration interface and get keys() from Hashtable
+            Enumeration<Integer> e = storage.keys();
+
+            // Checking for next element in Hashtable object with the help of hasMoreElements() method
+            while (e.hasMoreElements()) {
+
+                // Getting the key of a particular entry
+                int key = e.nextElement();
+    
+                // Print and display the key and item
+                Item i = storage.get(key);
+                printString += "["+ key + ": " + i.getValue() + ", " + i.getVersion() + "]";
+            }
+
+            printString += "}";
+
+            System.out.println(printString);
         }
 
         public void onStartMessage(StartMessage msg) {
             setGroup(msg);
             setInitialStorage(msg.keys, msg.values);
+
         }
 
         private void startRequest(Request request){
@@ -223,7 +255,7 @@ public class Ring {
         }
 
         private void onRequestAccessMsg(RequestAccessMsg msg) {
-            Item i = values.get(msg.request.getKey());
+            Item i = storage.get(msg.request.getKey());
             ActorRef coordinator = getSender();
             boolean accessGranted;
             if (msg.request.getType() == RequestType.Read) {
@@ -261,7 +293,7 @@ public class Ring {
         }
 
         private void onRequestValueMsg(RequestValueMsg msg) {
-            Item i = values.get(msg.request.getType());
+            Item i = storage.get(msg.request.getType());
             ActorRef sender = getSender();
             RequestType requestType = msg.request.getType();
             sender.tell(new ValueResponseMsg(i, msg.request), getSelf());
@@ -330,7 +362,7 @@ public class Ring {
 
         public void onChangeValueMsg(ChangeValueMsg msg) {
             Item newItem = new Item(msg.request.getNewValue(), msg.newVersion);
-            this.values.put(msg.request.getKey(), newItem);
+            this.storage.put(msg.request.getKey(), newItem);
         }
 
         void setTimeout(int time, int id_request) {
