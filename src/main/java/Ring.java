@@ -79,8 +79,12 @@ public class Ring {
 
     public static class ReturnValueMsg implements Serializable {
         public final Item item;
-        public ReturnValueMsg(Item item) {
+        public final int requestID;
+        public final Ring.Node.RequestType requestType;
+        public ReturnValueMsg(Item item, int requestID, Ring.Node.RequestType requestType) {
             this.item = item;
+            this.requestID = requestID;
+            this.requestType = requestType;
         }
     }
 
@@ -90,6 +94,20 @@ public class Ring {
         public ChangeValueMsg(Request request, int newVersion) {
             this.request = request;
             this.newVersion = newVersion;
+        }
+    }
+
+    public static class UnlockMsg implements Serializable {
+        public final Request request;
+        public UnlockMsg(Request request) {
+            this.request = request;
+        }
+    }
+
+    public static class OkMsg implements Serializable {
+        public final Request request;
+        public OkMsg(Request request) {
+            this.request = request;
         }
     }
 
@@ -115,7 +133,7 @@ public class Ring {
         private Hashtable<Integer, Item> storage = new Hashtable<>();            // list of keys and values
         private List<Peer> peers = new ArrayList<>();                       // list of peer banks
 
-        private Request currRequest;
+        //private Request currRequest;
 
         private ArrayList<Request> activeRequests = new ArrayList<>();
 
@@ -165,7 +183,7 @@ public class Ring {
         }
 
         private int getIndexOfFirstNode (int key) {
-            int index = peers.get(0).getID();
+            int index = 0;
 
             for (int i = 0; i < peers.size(); i++) {
                 if (peers.get(i).getID() >= key) {
@@ -175,25 +193,29 @@ public class Ring {
                     // then the first node to store the value is necessarily the node with the lowest ID (aka index = 0)
                 }
             }
-
             return index;
         }
 
         
 
         private void setInitialStorage(List<Integer> keys, List<String> values){
+            int my_index = 0;
+
+            for (int j = 0; j < peers.size(); j++) {
+                if (this.id == peers.get(j).getID()) {
+                    my_index = j;
+                    break;
+                }
+            }
             for(int i = 0; i < keys.size(); i++) {
                 int index = getIndexOfFirstNode(keys.get(i));
-
                 //System.out.println(keys.get(i) + " " + index);
 
-                if((index + this.id) % peers.size() < N) {
+                if ((my_index >= index && my_index < index + N) || (my_index <= index && my_index < ((index + N) % peers.size()))) {
                     this.storage.put(keys.get(i), new Item(values.get(i), 1));
                 }
             }
-            
             printNode();
-
         }
 
         private void printNode(){
@@ -229,6 +251,7 @@ public class Ring {
             int index = getIndexOfFirstNode(request.getKey());
 
             ActorRef owner = peers.get(index).getActor();
+            request.setOwner(owner);
             owner.tell(new RequestAccessMsg(request), getSelf());
         }
 
@@ -293,7 +316,8 @@ public class Ring {
         }
 
         private void onRequestValueMsg(RequestValueMsg msg) {
-            Item i = storage.get(msg.request.getType());
+            Item i = storage.get(msg.request.getKey());
+
             ActorRef sender = getSender();
             RequestType requestType = msg.request.getType();
             sender.tell(new ValueResponseMsg(i, msg.request), getSelf());
@@ -305,19 +329,27 @@ public class Ring {
                 int nResponses = msg.request.getnResponses();
                 Item currBest = msg.request.getCurrBest();
                 if (currBest == null) {
-                    currRequest.setCurrBest(msg.item);
+                    msg.request.setCurrBest(msg.item);
+                    //System.out.println(msg.item.getValue() + " " + msg.item.getVersion());
+                    //System.out.println("Ho impostato currBest a: " + msg.request.getCurrBest().getValue() + " " + msg.request.getCurrBest().getVersion());
                 }
                 else {
                     if (msg.item.getVersion() > currBest.getVersion()) {
-                        currBest = msg.item;
+                        msg.request.setCurrBest(msg.item);
                     }
                 }
 
                 if(msg.request.getType() == RequestType.Read){    //READ
                     if (nResponses >= read_quorum) {
-                        msg.request.getClient().tell(new ReturnValueMsg(currBest), getSelf());
+                        if (msg.request.getCurrBest() == null) {
+                            msg.request.getClient().tell(new ErrorMsg("Value does not exist in the ring"), getSelf());
+                        }
+                        else {
+                            msg.request.getClient().tell(new ReturnValueMsg(currBest, msg.request.getID(), msg.request.getType()), getSelf());
+                        }
 
                         activeRequests.remove(msg.request);
+                        msg.request.getOwner().tell(new UnlockMsg(msg.request), getSelf());
 
                         int length = requestQueue.size();
                         for (int i = 0; i < length; i++) {
@@ -330,8 +362,9 @@ public class Ring {
                 }
                 else {                  //WRITE
                     if (nResponses >= write_quorum) {
-
-                        msg.request.getClient().tell(new ReturnValueMsg(currBest), getSelf());
+                        // TODO ritornare solo messaggio di ok
+                        System.out.println("HO RAGGIUNTO IL WRITE QUORUM");
+                        msg.request.getClient().tell(new ReturnValueMsg(currBest, msg.request.getID(), msg.request.getType()), getSelf());
                         int index = getIndexOfFirstNode(msg.request.getKey());
                         int newVersion;
                         if (currBest == null) {
@@ -339,14 +372,17 @@ public class Ring {
                         }
                         else {
                             newVersion = currBest.getVersion() + 1;
+                            System.out.println("STO AGGIORNANDO LA VERSIONE " + newVersion);
                         }
+
                         for (int i = index; i < N + index; i++) {
                             int length = peers.size();
                             ActorRef actor = peers.get(i % length).getActor();
                             actor.tell(new ChangeValueMsg(msg.request, newVersion), getSelf());
                         }
 
-                        activeRequests.remove(msg.request);
+                        //activeRequests.remove(msg.request);
+                        // AGGIUNGO UN PASSAGGIO IN CUI ATTENDO CHE I NODI MI RISPONDANO OK PER L'UPDATE IN MODO DA POTER FARE L'UNLOCK DELL'ITEM NELL'OWNER
 
                         // TODO controllare che il while non sia un problema e in caso rimettere il for
                         while(!requestQueue.isEmpty()) {
@@ -363,6 +399,30 @@ public class Ring {
         public void onChangeValueMsg(ChangeValueMsg msg) {
             Item newItem = new Item(msg.request.getNewValue(), msg.newVersion);
             this.storage.put(msg.request.getKey(), newItem);
+            System.out.println("New item - key: " + msg.request.getKey() + ", new value: " + storage.get(msg.request.getKey()).getValue() + ", current version: " + storage.get(msg.request.getKey()).getVersion());
+            getSender().tell(new OkMsg(msg.request), getSelf());
+        }
+
+        public void onUnlockMsg(UnlockMsg msg) {
+            int key = msg.request.getKey();
+            if (msg.request.getType() == RequestType.Read) {
+                this.storage.get(key).unlockRead();
+            }
+            else {
+                this.storage.get(key).unlockUpdate();
+            }
+            System.out.println("Ho fatto l'unlock della richiesta " + msg.request.getType() + " " + msg.request.getID() + " chiave " + msg.request.getKey());
+        }
+
+        public void onOkMsg(OkMsg msg) {
+            // Nota: OkMsg riguarda solo le update requests, quindi non serve differenziare i casi in base al tipo di richiesta
+            if (activeRequests.contains(msg.request)) {
+                msg.request.incrementOkResponses();
+                if (msg.request.getOkResponses() >= write_quorum) {
+                    msg.request.getOwner().tell(new UnlockMsg(msg.request), getSelf());
+                    this.activeRequests.remove(msg.request);
+                }
+            }
         }
 
         void setTimeout(int time, int id_request) {
@@ -421,7 +481,6 @@ public class Ring {
             return receiveBuilder()
                     .match(StartMessage.class, this::onStartMessage)
                     .match(GetValueMsg.class, this::onGetValueMsg)
-                    //.match(UpdateValueMsg.class, this::onUpdateValueMsg)
                     .match(UpdateValueMsg.class, this::onUpdateValueMsg)
                     .match(RequestAccessMsg.class, this::onRequestAccessMsg)
                     .match(AccessResponseMsg.class, this::onAccessResponseMsg)
@@ -429,6 +488,8 @@ public class Ring {
                     .match(ValueResponseMsg.class, this::onValueResponseMsg)
                     .match(ChangeValueMsg.class, this::onChangeValueMsg)
                     .match(Timeout.class, this::onTimeout)
+                    .match(UnlockMsg.class, this::onUnlockMsg)
+                    .match(OkMsg.class, this::onOkMsg)
                     //.match(ReturnValueMsg.class, this::onReturnValueMsg)  NON CREDO SERVA PERCHE' L'HANDLER DEVE AVERLO IL CLIENT
                     .build();
         }
