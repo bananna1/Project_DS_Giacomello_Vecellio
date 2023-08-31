@@ -169,7 +169,7 @@ public class Ring {
 
             for (int i = 0; i < peers.size(); i++) {
                 if (peers.get(i).getID() >= key) {
-                    index = peers.get(i).getID();
+                    index = i;
                     break;
                     // If we're not able to find a node whose ID is greater than the key,
                     // then the first node to store the value is necessarily the node with the lowest ID (aka index = 0)
