@@ -70,7 +70,7 @@ public class DHTSystem {
         //group.get(2).getActor().tell(new Ring.GetValueMsg(key_prova_1), client1);
         //group.get(2).getActor().tell(new Ring.GetValueMsg(key_prova_2), client3);
         group.get(2).getActor().tell(new Ring.UpdateValueMsg(key_prova_1, "CACCA"), client3);
-        group.get(4).getActor().tell(new Ring.GetValueMsg(key_prova_1), client3);
+        //group.get(4).getActor().tell(new Ring.GetValueMsg(key_prova_1), client3);
 
 
         try {

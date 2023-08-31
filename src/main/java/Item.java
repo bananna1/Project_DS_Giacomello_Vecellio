@@ -22,25 +22,25 @@ public class Item {
         this.value = newValue;
         this.version ++;
     }
-    public boolean lockUpdate() {
-        if (this.lockedUpdate || this.nLockedRead > 0) {
-            return false;
-        }
+    public void lockUpdate() {
         this.lockedUpdate = true;
-        return true;
     }
     public void unlockUpdate() {
         this.lockedUpdate = false;
     }
+
     public boolean isLockedUpdate() {
         return this.lockedUpdate;
     }
-    public boolean lockRead() {
-        if (this.lockedUpdate) {
-            return false;
-        }
+
+    public boolean isLockedRead() {
+        if(nLockedRead>0)
+            return true;
+        return false;
+    }
+
+    public void lockRead() {
         nLockedRead ++;
-        return true;
     }
     public void unlockRead() {
         nLockedRead --;

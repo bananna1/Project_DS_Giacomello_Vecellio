@@ -280,12 +280,20 @@ public class Ring {
         private void onRequestAccessMsg(RequestAccessMsg msg) {
             Item i = storage.get(msg.request.getKey());
             ActorRef coordinator = getSender();
-            boolean accessGranted;
-            if (msg.request.getType() == RequestType.Read) {
-                accessGranted = i.lockRead();
+            boolean accessGranted = false;
+            if (msg.request.getType() == RequestType.Read) { //READ
+                //SE NON CI SONO UPDATE, ACCCESS GRANTED
+                if(!i.isLockedUpdate()){
+                    i.lockRead();
+                    accessGranted = true;
+                }
             }
-            else {
-                accessGranted = i.lockUpdate();
+            else { //UPDATE
+                // SE NON CI SONO READ DELL'ITEM O UPDATE DELL'ITEM, ACCESS GRANTED
+                if(!i.isLockedRead() && !i.isLockedUpdate()){
+                    i.lockUpdate();
+                    accessGranted = true;
+                }
             }
 
             if (accessGranted) {
@@ -410,6 +418,10 @@ public class Ring {
             }
             else {
                 this.storage.get(key).unlockUpdate();
+                for(Peer p: peers){
+                    printNode();
+                }
+                
             }
             System.out.println("Ho fatto l'unlock della richiesta " + msg.request.getType() + " " + msg.request.getID() + " chiave " + msg.request.getKey());
         }
