@@ -10,8 +10,11 @@ public class Client extends AbstractActor {
     static public Props props(int id) {
         return Props.create(Client.class, () -> new Client(id));
     }
+    public int getId() {
+        return this.id;
+    }
     public void onReturnValueMsg(Ring.ReturnValueMsg msg) {
-        System.out.println("Client: " + this.id + ", id request: " + msg.requestID + ", request type " + msg.requestType + ", value: " + msg.item.getValue() + "; version: " + msg.item.getVersion());
+        System.out.println("Return message - Client: " + this.id + ", id request: " + msg.requestID + ", request type " + msg.requestType + ", value: " + msg.item.getValue() + "; version: " + msg.item.getVersion());
     }
     public void onErrorMsg(Ring.ErrorMsg msg) {
         System.out.println(msg.error);

@@ -138,6 +138,7 @@ public class Ring {
         private ArrayList<Request> activeRequests = new ArrayList<>();
 
         private Queue<Request> requestQueue = new LinkedList<>();
+        private ArrayList<Request> pendingRequests = new ArrayList<>();
 
         public final int N = 4;
 
@@ -252,6 +253,7 @@ public class Ring {
 
             ActorRef owner = peers.get(index).getActor();
             request.setOwner(owner);
+            System.out.println("Request started - id request: " + request.getID() + ", type: " + request.getType() + ", Key: " + request.getKey() + ", client: " + request.getClient());
             owner.tell(new RequestAccessMsg(request), getSelf());
         }
 
@@ -278,6 +280,7 @@ public class Ring {
         }
 
         private void onRequestAccessMsg(RequestAccessMsg msg) {
+            System.out.println("Access requested");
             Item i = storage.get(msg.request.getKey());
             ActorRef coordinator = getSender();
             boolean accessGranted = false;
@@ -286,6 +289,7 @@ public class Ring {
                 if(!i.isLockedUpdate()){
                     i.lockRead();
                     accessGranted = true;
+                    System.out.println("Access granted for read operation - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
                 }
             }
             else { //UPDATE
@@ -293,6 +297,7 @@ public class Ring {
                 if(!i.isLockedRead() && !i.isLockedUpdate()){
                     i.lockUpdate();
                     accessGranted = true;
+                    System.out.println("Access granted for update operation - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
                 }
             }
 
@@ -300,6 +305,7 @@ public class Ring {
                 coordinator.tell(new AccessResponseMsg(true, msg.request), getSelf());
             }
             else {
+                System.out.println("Access denied - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
                 coordinator.tell(new AccessResponseMsg(false, msg.request), getSelf());
             }
         }
@@ -320,20 +326,22 @@ public class Ring {
             else {
                 activeRequests.remove(msg.request);
                 requestQueue.add(msg.request);
+                System.out.println("Request added to the queue - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
             }
         }
 
         private void onRequestValueMsg(RequestValueMsg msg) {
             Item i = storage.get(msg.request.getKey());
-
             ActorRef sender = getSender();
             RequestType requestType = msg.request.getType();
+            System.out.println("value requested - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
             sender.tell(new ValueResponseMsg(i, msg.request), getSelf());
         }
 
         private void onValueResponseMsg(ValueResponseMsg msg) {
             if (activeRequests.contains(msg.request)) {
                 msg.request.incrementnResponses();
+                System.out.println("Response message n. " + msg.request.getnResponses() + " - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
                 int nResponses = msg.request.getnResponses();
                 Item currBest = msg.request.getCurrBest();
                 if (currBest == null) {
@@ -360,7 +368,16 @@ public class Ring {
                         msg.request.getOwner().tell(new UnlockMsg(msg.request), getSelf());
 
                         int length = requestQueue.size();
+                        /*
                         for (int i = 0; i < length; i++) {
+                            System.out.println("STO FACENDO IL DEQUEUE");
+                            Request r = requestQueue.remove();
+                            activeRequests.add(r);
+                            startRequest(r);
+                        }
+                         */
+                        while(!requestQueue.isEmpty()) {
+                            System.out.println("STO FACENDO IL DEQUEUE");
                             Request r = requestQueue.remove();
                             activeRequests.add(r);
                             startRequest(r);
@@ -389,11 +406,14 @@ public class Ring {
                             actor.tell(new ChangeValueMsg(msg.request, newVersion), getSelf());
                         }
 
-                        //activeRequests.remove(msg.request);
+                        activeRequests.remove(msg.request);
+                        pendingRequests.add(msg.request);
+                        //mettiamo la richiesta in un altro array in attesa dei messaggi di ok
                         // AGGIUNGO UN PASSAGGIO IN CUI ATTENDO CHE I NODI MI RISPONDANO OK PER L'UPDATE IN MODO DA POTER FARE L'UNLOCK DELL'ITEM NELL'OWNER
 
                         // TODO controllare che il while non sia un problema e in caso rimettere il for
                         while(!requestQueue.isEmpty()) {
+                            System.out.println("STO FACENDO IL DEQUEUE");
                             Request r = requestQueue.remove();
                             activeRequests.add(r);
                             startRequest(r);
@@ -419,20 +439,20 @@ public class Ring {
             else {
                 this.storage.get(key).unlockUpdate();
                 for(Peer p: peers){
-                    printNode();
+                    //printNode();
                 }
                 
             }
-            System.out.println("Ho fatto l'unlock della richiesta " + msg.request.getType() + " " + msg.request.getID() + " chiave " + msg.request.getKey());
+            System.out.println("Ho fatto l'unlock della richiesta " + msg.request.getType() + ", id request: " + msg.request.getID() + " chiave " + msg.request.getKey());
         }
 
         public void onOkMsg(OkMsg msg) {
             // Nota: OkMsg riguarda solo le update requests, quindi non serve differenziare i casi in base al tipo di richiesta
-            if (activeRequests.contains(msg.request)) {
+            if (pendingRequests.contains(msg.request)) {
                 msg.request.incrementOkResponses();
                 if (msg.request.getOkResponses() >= write_quorum) {
                     msg.request.getOwner().tell(new UnlockMsg(msg.request), getSelf());
-                    this.activeRequests.remove(msg.request);
+                    this.pendingRequests.remove(msg.request);
                 }
             }
         }
@@ -447,6 +467,7 @@ public class Ring {
         }
 
         public void onTimeout(Timeout msg) {
+            System.out.println("TIMEOUT SCATTATO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
             Request request = null;
 
             // check if the request is in the active requests
@@ -467,6 +488,7 @@ public class Ring {
                 }
             }
             else {
+                System.out.println("Ho trovato la richiesta che ha fatto scattare il timeout");
                 if (request.getType() == RequestType.Read) {
                     if (request.getnResponses() < read_quorum) {
                         activeRequests.remove(request);
