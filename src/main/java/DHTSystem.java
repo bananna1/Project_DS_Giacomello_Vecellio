@@ -61,15 +61,16 @@ public class DHTSystem {
         ActorRef client2 = system.actorOf(Client.props(2));
         ActorRef client3 = system.actorOf(Client.props(3));
 
-        System.out.println("Client 3 richiede chiave " + key_prova_1);
+        //System.out.println("Client 3 richiede chiave " + key_prova_1);
         //System.out.println("Client 2 richiede chiave " + key_prova_1);
         //System.out.println("Client 3 richiede chiave " + key_prova_2);
-        System.out.println("Client 3 richiede update chiave " + key_prova_1 + " con il valore CACCA");
+        //System.out.println("Client 3 richiede update chiave " + key_prova_1 + " con il valore CACCA");
         //System.out.println("Client 3 richiede chiave " + key_prova_1);
 
         //group.get(2).getActor().tell(new Ring.GetValueMsg(key_prova_1), client1);
-        group.get(1).getActor().tell(new Ring.GetValueMsg(key_prova_1), client3);
-        group.get(2).getActor().tell(new Ring.UpdateValueMsg(key_prova_1, "CACCA"), client3);
+        //group.get(1).getActor().tell(new Ring.GetValueMsg(key_prova_1), client3);
+        group.get(0).getActor().tell(new Ring.UpdateValueMsg(key_prova_1, "CACCA 1"), client3);
+        group.get(2).getActor().tell(new Ring.UpdateValueMsg(key_prova_2, "CACCA 2"), client1);
         //group.get(4).getActor().tell(new Ring.GetValueMsg(key_prova_1), client3);
 
 

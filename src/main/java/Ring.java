@@ -124,6 +124,11 @@ public class Ring {
             this.id_request = id_request;
         }
     }
+    public static class TimeoutDequeue implements Serializable {
+        public TimeoutDequeue() {
+        }
+    }
+
 
 
     public static class Node extends AbstractActor{
@@ -143,6 +148,7 @@ public class Ring {
         public final int N = 4;
 
         public final int TIMEOUT_REQUEST = 5000;
+        public final int TIMEOUT_DEQUEUE = 2000;
         public final int read_quorum = N / 2 + 1;
         public final int write_quorum = N / 2 + 1;
 
@@ -155,6 +161,7 @@ public class Ring {
         public Node(int id /*boolean isCoordinator, Node next, Node previous*/){
             super();
             this.id = id;
+            setTimeoutDequeue(TIMEOUT_DEQUEUE);
 
             /*
             this.next = next;
@@ -337,14 +344,14 @@ public class Ring {
             Item i = storage.get(msg.request.getKey());
             ActorRef sender = getSender();
             RequestType requestType = msg.request.getType();
-            System.out.println("value requested - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
+            //System.out.println("value requested - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
             sender.tell(new ValueResponseMsg(i, msg.request), getSelf());
         }
 
         private void onValueResponseMsg(ValueResponseMsg msg) {
             if (activeRequests.contains(msg.request)) {
                 msg.request.incrementnResponses();
-                System.out.println("Response message n. " + msg.request.getnResponses() + " - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
+                //System.out.println("Response message n. " + msg.request.getnResponses() + " - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
                 int nResponses = msg.request.getnResponses();
                 Item currBest = msg.request.getCurrBest();
                 if (currBest == null) {
@@ -370,32 +377,12 @@ public class Ring {
                         activeRequests.remove(msg.request);
                         msg.request.getOwner().tell(new UnlockMsg(msg.request), getSelf());
 
-                        int length = requestQueue.size();
-                        /*
-                        for (int i = 0; i < length; i++) {
-                            System.out.println("STO FACENDO IL DEQUEUE");
-                            Request r = requestQueue.remove();
-                            activeRequests.add(r);
-                            startRequest(r);
-                        }
-                         */
-                        System.out.println("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA 1, QUEUE SIZE " + requestQueue.size());
-                        while (!requestQueue.isEmpty()) {
-                            System.out.println("Queue size: " + requestQueue.size()); // Debugging output
-                            System.out.println("STO FACENDO IL DEQUEUE");
-                            Request r = requestQueue.remove();
-                            System.out.println("Removed request: " + r); // Debugging output
-                            activeRequests.add(r);
-                            startRequest(r);
-                            System.out.println("Request processed: " + r); // Debugging output
-                        }
-
                     }
                 }
                 else {                  //WRITE
                     if (nResponses >= write_quorum) {
                         // TODO ritornare solo messaggio di ok
-                        System.out.println("HO RAGGIUNTO IL WRITE QUORUM");
+                        //System.out.println("HO RAGGIUNTO IL WRITE QUORUM");
                         msg.request.getClient().tell(new ReturnValueMsg(currBest, msg.request.getID(), msg.request.getType()), getSelf());
                         int index = getIndexOfFirstNode(msg.request.getKey());
                         int newVersion;
@@ -404,7 +391,7 @@ public class Ring {
                         }
                         else {
                             newVersion = currBest.getVersion() + 1;
-                            System.out.println("STO AGGIORNANDO LA VERSIONE " + newVersion);
+                            //System.out.println("STO AGGIORNANDO LA VERSIONE " + newVersion);
                         }
 
                         for (int i = index; i < N + index; i++) {
@@ -418,17 +405,6 @@ public class Ring {
                         //mettiamo la richiesta in un altro array in attesa dei messaggi di ok
                         // AGGIUNGO UN PASSAGGIO IN CUI ATTENDO CHE I NODI MI RISPONDANO OK PER L'UPDATE IN MODO DA POTER FARE L'UNLOCK DELL'ITEM NELL'OWNER
 
-                        // TODO controllare che il while non sia un problema e in caso rimettere il for
-                        System.out.println("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA 2, QUEUE SIZE " + requestQueue.size());
-                        while (!requestQueue.isEmpty()) {
-                            System.out.println("Queue size: " + requestQueue.size()); // Debugging output
-                            System.out.println("STO FACENDO IL DEQUEUE");
-                            Request r = requestQueue.remove();
-                            System.out.println("Removed request: " + r); // Debugging output
-                            activeRequests.add(r);
-                            startRequest(r);
-                            System.out.println("Request processed: " + r); // Debugging output
-                        }
                     } 
                 }
 
@@ -438,7 +414,7 @@ public class Ring {
         public void onChangeValueMsg(ChangeValueMsg msg) {
             Item newItem = new Item(msg.request.getNewValue(), msg.newVersion);
             this.storage.put(msg.request.getKey(), newItem);
-            System.out.println("New item - key: " + msg.request.getKey() + ", new value: " + storage.get(msg.request.getKey()).getValue() + ", current version: " + storage.get(msg.request.getKey()).getVersion());
+            //System.out.println("New item - key: " + msg.request.getKey() + ", new value: " + storage.get(msg.request.getKey()).getValue() + ", current version: " + storage.get(msg.request.getKey()).getVersion());
             getSender().tell(new OkMsg(msg.request), getSelf());
         }
 
@@ -454,7 +430,6 @@ public class Ring {
                 }
                 
             }
-            System.out.println("Ho fatto l'unlock della richiesta " + msg.request.getType() + ", id request: " + msg.request.getID() + " chiave " + msg.request.getKey());
         }
 
         public void onOkMsg(OkMsg msg) {
@@ -464,16 +439,6 @@ public class Ring {
                 if (msg.request.getOkResponses() >= write_quorum) {
                     msg.request.getOwner().tell(new UnlockMsg(msg.request), getSelf());
                     this.pendingRequests.remove(msg.request);
-                    System.out.println("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA 3, QUEUE SIZE " + requestQueue.size());
-                    while (!requestQueue.isEmpty()) {
-                        System.out.println("Queue size: " + requestQueue.size()); // Debugging output
-                        System.out.println("STO FACENDO IL DEQUEUE");
-                        Request r = requestQueue.remove();
-                        System.out.println("Removed request: " + r); // Debugging output
-                        activeRequests.add(r);
-                        startRequest(r);
-                        System.out.println("Request processed: " + r); // Debugging output
-                    }
                 }
             }
         }
@@ -486,9 +451,30 @@ public class Ring {
                     getContext().system().dispatcher(), getSelf()
             );
         }
+        void setTimeoutDequeue(int time) {
+            getContext().system().scheduler().scheduleOnce(
+                    Duration.create(time, TimeUnit.MILLISECONDS),
+                    getSelf(),
+                    new TimeoutDequeue(), // the message to send
+                    getContext().system().dispatcher(), getSelf()
+            );
+        }
+        public void onTimeoutDequeue(TimeoutDequeue msg) {
+            //System.out.println("SONO NEL TIMEOUT DEQUEUEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE");
+            while (!this.requestQueue.isEmpty()) {
+                System.out.println("Queue size: " + requestQueue.size()); // Debugging output
+                System.out.println("STO FACENDO IL DEQUEUE");
+                Request r = requestQueue.remove();
+                System.out.println("Removed request: " + r); // Debugging output
+                activeRequests.add(r);
+                startRequest(r);
+                System.out.println("Request processed: " + r); // Debugging output
+            }
+            setTimeoutDequeue(TIMEOUT_DEQUEUE);
+        }
 
         public void onTimeout(Timeout msg) {
-            System.out.println("TIMEOUT SCATTATO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+            //System.out.println("TIMEOUT SCATTATO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
             Request request = null;
 
             // check if the request is in the active requests
@@ -562,6 +548,7 @@ public class Ring {
                     .match(ValueResponseMsg.class, this::onValueResponseMsg)
                     .match(ChangeValueMsg.class, this::onChangeValueMsg)
                     .match(Timeout.class, this::onTimeout)
+                    .match(TimeoutDequeue.class, this::onTimeoutDequeue)
                     .match(UnlockMsg.class, this::onUnlockMsg)
                     .match(OkMsg.class, this::onOkMsg)
                     //.match(ReturnValueMsg.class, this::onReturnValueMsg)  NON CREDO SERVA PERCHE' L'HANDLER DEVE AVERLO IL CLIENT
