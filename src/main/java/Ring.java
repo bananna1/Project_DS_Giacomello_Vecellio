@@ -327,6 +327,9 @@ public class Ring {
                 activeRequests.remove(msg.request);
                 requestQueue.add(msg.request);
                 System.out.println("Request added to the queue - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
+                if (requestQueue.contains(msg.request) && !requestQueue.isEmpty() && requestQueue.size() > 0) {
+                    System.out.println("HO EFFETTIVAMENTE MESSO LA RICHIESTA IN CODA, Queue size: " + requestQueue.size());
+                }
             }
         }
 
@@ -376,11 +379,15 @@ public class Ring {
                             startRequest(r);
                         }
                          */
-                        while(!requestQueue.isEmpty()) {
+                        System.out.println("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA 1, QUEUE SIZE " + requestQueue.size());
+                        while (!requestQueue.isEmpty()) {
+                            System.out.println("Queue size: " + requestQueue.size()); // Debugging output
                             System.out.println("STO FACENDO IL DEQUEUE");
                             Request r = requestQueue.remove();
+                            System.out.println("Removed request: " + r); // Debugging output
                             activeRequests.add(r);
                             startRequest(r);
+                            System.out.println("Request processed: " + r); // Debugging output
                         }
 
                     }
@@ -412,11 +419,15 @@ public class Ring {
                         // AGGIUNGO UN PASSAGGIO IN CUI ATTENDO CHE I NODI MI RISPONDANO OK PER L'UPDATE IN MODO DA POTER FARE L'UNLOCK DELL'ITEM NELL'OWNER
 
                         // TODO controllare che il while non sia un problema e in caso rimettere il for
-                        while(!requestQueue.isEmpty()) {
+                        System.out.println("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA 2, QUEUE SIZE " + requestQueue.size());
+                        while (!requestQueue.isEmpty()) {
+                            System.out.println("Queue size: " + requestQueue.size()); // Debugging output
                             System.out.println("STO FACENDO IL DEQUEUE");
                             Request r = requestQueue.remove();
+                            System.out.println("Removed request: " + r); // Debugging output
                             activeRequests.add(r);
                             startRequest(r);
+                            System.out.println("Request processed: " + r); // Debugging output
                         }
                     } 
                 }
@@ -453,6 +464,16 @@ public class Ring {
                 if (msg.request.getOkResponses() >= write_quorum) {
                     msg.request.getOwner().tell(new UnlockMsg(msg.request), getSelf());
                     this.pendingRequests.remove(msg.request);
+                    System.out.println("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA 3, QUEUE SIZE " + requestQueue.size());
+                    while (!requestQueue.isEmpty()) {
+                        System.out.println("Queue size: " + requestQueue.size()); // Debugging output
+                        System.out.println("STO FACENDO IL DEQUEUE");
+                        Request r = requestQueue.remove();
+                        System.out.println("Removed request: " + r); // Debugging output
+                        activeRequests.add(r);
+                        startRequest(r);
+                        System.out.println("Request processed: " + r); // Debugging output
+                    }
                 }
             }
         }
@@ -479,6 +500,7 @@ public class Ring {
                 }
             }
             if (request == null) {
+                // check if the request is in the request queue
                 for (Request r : this.requestQueue) {
                     int i = r.getID();
                     if (i == msg.id_request) {
@@ -487,17 +509,35 @@ public class Ring {
                     }
                 }
             }
-            else {
+            if (request == null) {
+                // check if the request is in the request queue
+                for (Request r : this.pendingRequests) {
+                    int i = r.getID();
+                    if (i == msg.id_request) {
+                        request = r;
+                        break;
+                    }
+                }
+            }
+            if (request != null) {
                 System.out.println("Ho trovato la richiesta che ha fatto scattare il timeout");
                 if (request.getType() == RequestType.Read) {
                     if (request.getnResponses() < read_quorum) {
                         activeRequests.remove(request);
+                        System.out.println("Sono nella funzione di timeout, sto togliendo l'elemento, queue size: " + requestQueue.size());
+                        requestQueue.remove(request);
+                        pendingRequests.remove(request);
+                        System.out.println("Sono nella funzione di timeout, ho tolto l'elemento, queue size: " + requestQueue.size());
                         request.getClient().tell(new ErrorMsg("Your Read request " + msg.id_request + " took too much to be satisfied"), getSelf());
                     }
                 }
                 else {
-                    if (request.getnResponses() < write_quorum) {
+                    if (request.getnResponses() < write_quorum || request.getOkResponses() < write_quorum) {
                         activeRequests.remove(request);
+                        System.out.println("Sono nella funzione di timeout, sto togliendo l'elemento, queue size: " + requestQueue.size());
+                        requestQueue.remove(request);
+                        pendingRequests.remove(request);
+                        System.out.println("Sono nella funzione di timeout, ho tolto l'elemento, queue size: " + requestQueue.size());
                         request.getClient().tell(new ErrorMsg("Your Update request " + msg.id_request +  " took too much to be satisfied"), getSelf());
                     }
                 }
