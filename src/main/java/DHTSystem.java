@@ -53,7 +53,6 @@ public class DHTSystem {
         Ring.StartMessage start = new Ring.StartMessage(group, keys, values);
 
         for (Peer peer: group) {
-            
             peer.getActor().tell(start, null);
         }
 

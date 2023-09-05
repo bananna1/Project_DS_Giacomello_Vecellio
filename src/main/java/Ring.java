@@ -129,6 +129,22 @@ public class Ring {
         }
     }
 
+    public static class JoinRequestMsg implements Serializable {
+        public final Node joiningNode;
+        public final ActorRef bootStrappingPeer;
+        public JoinRequestMsg(Node joiningNode, ActorRef bootStrappingPeer){
+            this.joiningNode = joiningNode;
+            this.bootStrappingPeer = bootStrappingPeer;
+        }
+    }
+
+    public static class SendPeerList implements Serializable {
+        public final List<Peer> group;
+        public SendPeerList(List<Peer> group){
+            this.group = Collections.unmodifiableList(new ArrayList<>(group));
+        }
+    }
+
 
 
     public static class Node extends AbstractActor{
@@ -137,8 +153,6 @@ public class Ring {
         private ActorRef actor;
         private Hashtable<Integer, Item> storage = new Hashtable<>();            // list of keys and values
         private List<Peer> peers = new ArrayList<>();                       // list of peer banks
-
-        //private Request currRequest;
 
         private ArrayList<Request> activeRequests = new ArrayList<>();
 
@@ -155,6 +169,11 @@ public class Ring {
         public enum RequestType {
             Read,
             Update
+        }
+
+        public enum ExternalRequestType {
+            Join,
+            Leave
         }
 
         /*-- Actor constructors --------------------------------------------------- */
@@ -182,9 +201,9 @@ public class Ring {
             storage.put(key, new Item(value, version));
         }
 
-        void setGroup(StartMessage sm) {
+        void setGroup(List<Peer> group) {
             peers = new ArrayList<>();
-            for (Peer b: sm.group) {
+            for (Peer b: group) {
                 this.peers.add(b);
             }
             //print("starting with " + sm.group.size() + " peer(s)");
@@ -204,7 +223,9 @@ public class Ring {
             return index;
         }
 
-        
+        static public Props props(int id) {
+            return Props.create(Node.class, () -> new Node(id));
+        }
 
         private void setInitialStorage(List<Integer> keys, List<String> values){
             int my_index = 0;
@@ -250,7 +271,7 @@ public class Ring {
         }
 
         public void onStartMessage(StartMessage msg) {
-            setGroup(msg);
+            setGroup(msg.group);
             setInitialStorage(msg.keys, msg.values);
 
         }
@@ -530,9 +551,33 @@ public class Ring {
             }
         }
 
-        static public Props props(int id) {
-            return Props.create(Node.class, () -> new Node(id));
+        public void onJoinRequestMsg(JoinRequestMsg msg) {
+
+            // Error message if the key already exists
+            boolean alreadyTaken = false;
+            for(Peer peer : peers){
+                if(peer.getID() == msg.joiningNode.getID())
+                    getSender().tell(new ErrorMsg("This ID is already taken"), getSelf());
+                    alreadyTaken = true;
+                    break;
+            }
+
+            if(!alreadyTaken){
+                // Create an external request with type::Join
+                ExternalRequest request = new ExternalRequest(msg.joiningNode, ExternalRequestType.Join, msg.bootStrappingPeer);
+
+                // Request nodes to bootStrapping peer
+                
+            }
+            
+
         }
+
+        public void onSendPeerList(SendPeerList msg) {
+            setGroup(msg.group);
+
+        }
+        
 
 
         @SuppressWarnings("unchecked")
@@ -551,7 +596,8 @@ public class Ring {
                     .match(TimeoutDequeue.class, this::onTimeoutDequeue)
                     .match(UnlockMsg.class, this::onUnlockMsg)
                     .match(OkMsg.class, this::onOkMsg)
-                    //.match(ReturnValueMsg.class, this::onReturnValueMsg)  NON CREDO SERVA PERCHE' L'HANDLER DEVE AVERLO IL CLIENT
+                    .match(JoinRequestMsg.class, this::onJoinRequestMsg)
+                    .match(SendPeerList.class, this::onSendPeerList)
                     .build();
         }
     }
