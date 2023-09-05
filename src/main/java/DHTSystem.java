@@ -22,7 +22,7 @@ public class DHTSystem {
         final ActorSystem system = ActorSystem.create("DHT_System");
 
         // Create the nodes
-        List<Peer> group = new ArrayList<>();
+        ArrayList<Peer> group = new ArrayList<>();
         for (int i=1; i<=N_PARTICIPANTS; i++) {
             Peer p = new Peer(i*10, system.actorOf(Ring.Node.props(i*10), "peer" + i*10));
             group.add(p);
@@ -35,7 +35,8 @@ public class DHTSystem {
         int key_prova_1 = 0;
         int key_prova_2 = 0;
 
-        for(int i=1; i<=N_ITEM; i++){
+        /*
+        for (int i=1; i<=N_ITEM; i++) {
 
             int key = ThreadLocalRandom.current().nextInt(0, (N_PARTICIPANTS*10+5)  + 1);
             keys.add(key);
@@ -48,6 +49,16 @@ public class DHTSystem {
             char value = randomChar();
             values.add(value + "");
         }
+         */
+        keys.add(16);
+        keys.add(49);
+        keys.add(62);
+        keys.add(64);
+
+        values.add("A");
+        values.add("B");
+        values.add("C");
+        values.add("D");
 
         // Send start messages to the participants to inform them of the group and to create the initial storage
         Ring.StartMessage start = new Ring.StartMessage(group, keys, values);

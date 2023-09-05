@@ -182,6 +182,8 @@ public class Ring {
         private Queue<Request> requestQueue = new LinkedList<>();
         private ArrayList<Request> pendingRequests = new ArrayList<>();
 
+        private int VariabileProva = 0;  // serve in caso di join a sapere quanti messaggi di return hai ricevuto dai read così puoi fare l'announce agli altri nodi
+
         public final int N = 4;
 
         public final int TIMEOUT_REQUEST = 5000;
@@ -199,16 +201,11 @@ public class Ring {
             Leave
         }
 
-        /*-- Actor constructors --------------------------------------------------- */
+        /*-- Node constructor --------------------------------------------------- */
         public Node(int id /*boolean isCoordinator, Node next, Node previous*/){
             super();
             this.id = id;
             setTimeoutDequeue(TIMEOUT_DEQUEUE);
-
-            /*
-            this.next = next;
-            this.previous = previous;
-            */
         }
         public int getID() {
             return this.id;
@@ -221,7 +218,7 @@ public class Ring {
         }
 
         public void addValue (int key, String value, int version) {
-            storage.put(key, new Item(value, version, key));
+            storage.put(key, new Item(key, value, version));
         }
 
         void setGroup(List<Peer> group) {
@@ -246,6 +243,38 @@ public class Ring {
             return index;
         }
 
+        private void addPeer(Peer newPeer) {
+            int newPeerPosition = 0;
+            for (int i = 0; i < peers.size(); i++) {
+                if (newPeer.getID() < peers.get(i).getID()) {
+                    newPeerPosition = i;
+                    break;
+                }
+            }
+            peers.add(newPeerPosition, newPeer);
+        }
+        private List<Peer> addPeer(Peer newPeer, List<Peer> list) {
+            int newPeerPosition = 0;
+            List<Peer> newList = new ArrayList<>();
+            for (int i = 0; i < list.size(); i++) {
+                if (newPeer.getID() < list.get(i).getID()) {
+                    newPeerPosition = i;
+                    break;
+                }
+            }
+            int listIndex = 0;
+            for (int j = 0; j < list.size() + 1; j++) {
+                if (j == newPeerPosition) {
+                    newList.add(newPeer);
+                }
+                else {
+                    newList.add(list.get(listIndex));
+                    listIndex++;
+                }
+            }
+            return newList;
+        }
+
         static public Props props(int id) {
             return Props.create(Node.class, () -> new Node(id));
         }
@@ -263,8 +292,8 @@ public class Ring {
                 int index = getIndexOfFirstNode(keys.get(i));
                 //System.out.println(keys.get(i) + " " + index);
 
-                if ((my_index >= index && my_index < index + N) || (my_index <= index && my_index < ((index + N) % peers.size()))) {
-                    this.storage.put(keys.get(i), new Item(values.get(i), 1, keys.get(i)));
+                if ((my_index >= index && my_index < index + N) || (my_index <= index && my_index < ((index + N) % peers.size()) && ((index + N) % peers.size()) < index)) {
+                    this.storage.put(keys.get(i), new Item(keys.get(i), values.get(i), 1));
                 }
             }
             printNode();
@@ -456,7 +485,7 @@ public class Ring {
         }
 
         public void onChangeValueMsg(ChangeValueMsg msg) {
-            Item newItem = new Item(msg.request.getNewValue(), msg.newVersion, msg.request.getKey());
+            Item newItem = new Item(msg.request.getKey(), msg.request.getNewValue(), msg.newVersion);
             this.storage.put(msg.request.getKey(), newItem);
             //System.out.println("New item - key: " + msg.request.getKey() + ", new value: " + storage.get(msg.request.getKey()).getValue() + ", current version: " + storage.get(msg.request.getKey()).getVersion());
             getSender().tell(new OkMsg(msg.request), getSelf());
@@ -575,20 +604,23 @@ public class Ring {
         }
 
         public void onJoinRequestMsg(JoinRequestMsg msg) {
-
+            System.out.println("SONO QUA");
             // Error message if the key already exists
             boolean alreadyTaken = false;
             for(Peer peer : peers){
-                if(peer.getID() == msg.joiningPeer.getID())
+                System.out.println("Id peer: " + peer.getID());
+                if(peer.getID() == msg.joiningPeer.getID()) {
                     getSender().tell(new ErrorMsg("This ID is already taken"), getSelf());
                     alreadyTaken = true;
                     break;
+                }
             }
-
+            System.out.println("Valore di alreadyTaken: " + alreadyTaken);
             if(!alreadyTaken){
+                System.out.println("SONO QUA X2");
                 // Create an external request with type::Join
                 ExternalRequest request = new ExternalRequest(msg.joiningPeer, ExternalRequestType.Join, msg.bootStrappingPeer);
-
+                System.out.println("BN; Join requested to node " + this.id);
                 // Send peer list to the joining node
                 msg.joiningPeer.getActor().tell(new SendPeerListMsg(Collections.unmodifiableList(new ArrayList<>(this.peers))), getSelf());
             }
@@ -599,17 +631,20 @@ public class Ring {
         public void onSendPeerListMsg(SendPeerListMsg msg) {
 
             // Add myself to the list of peer
-            msg.group.add(new Peer(id, getSelf()));
+            List<Peer> updatedGroup = addPeer(new Peer(id, getSelf()), msg.group);
 
             // TODO SORT GROUP
 
-            setGroup(msg.group);
+            setGroup(updatedGroup);
 
             // Find the clockwise neighbor node
-            int indexClockwiseNode = getIndexOfFirstNode(this.id);
-
+            int indexClockwiseNode = getIndexOfFirstNode(this.id) + 1; // ALTRIMENTI TROVA SE STESSO; IN QUESTO MODO TROVA IL NODO IMMEDIATAMENTE SUCCESSIVO A SE STESSO
+            if (indexClockwiseNode == peers.size()) {
+                indexClockwiseNode = 0; // se il nuovo nodo è l'ultimo allora il clockwise neighbor è il primo della lista
+            }
             // Send message to the clockwise node in order to retrieve the list of items
             Peer neighbor = peers.get(indexClockwiseNode);
+            System.out.println("JN; Got SendPeerList message. Found clockwise neighbor: " + neighbor.getID());
             neighbor.getActor().tell(new GetNeighborItemsMsg(), getSelf());
 
         }
@@ -617,15 +652,15 @@ public class Ring {
         public void onGetNeighborItemsMsg(GetNeighborItemsMsg msg){
 
             // Send message to the joining node with the items list
+            System.out.println("NN; Received request to retrieve items");
             getSender().tell(new SendItemsListMsg(storage), getSelf());
-
-
         }
         
         public void onSendItemsListMsg(SendItemsListMsg msg) {
 
             // Set the storage of the joining node
             this.storage = msg.items;
+            System.out.println("JN; Inserted items in storage, requesting read on each item");
 
             // Creating  Enumeration interface and get keys() from Hashtable
             Enumeration<Integer> e = storage.keys();
@@ -638,52 +673,65 @@ public class Ring {
 
                 // Send a read request for every items
                 getSender().tell(new GetValueMsg(key), getSelf());
-
             }
+
+
 
         }
-
         public void onReturnValueMsg(ReturnValueMsg msg) {
-
+            VariabileProva++;
+            System.out.println("Received return message for key " + msg.item.getKey() + ", value: " + msg.item.getValue() + ", version: " + msg.item.getVersion());
             // Change version if it is not updated
+            System.out.println("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA LA VERSIONE ATTUALE E': " + storage.get(msg.item.getKey()).getVersion());
             if(msg.item.getVersion() > storage.get(msg.item.getKey()).getVersion()) {
                 storage.put(msg.item.getKey(), msg.item);
+                System.out.println("Changed item version");
+            }
+            if(VariabileProva == storage.size()) {
+                List<Item> items = new ArrayList<>();
+
+                // Creating  Enumeration interface and get keys() from Hashtable
+                Enumeration<Integer> e = storage.keys();
+
+                // Checking for next element in Hashtable object with the help of hasMoreElements() method
+                while (e.hasMoreElements()) {
+
+                    // Getting the key of a particular entry
+                    int key = e.nextElement();
+
+                    Item i = storage.get(key);
+
+                    items.add(i);
+
+                    // Send a read request for every item
+                    //getSender().tell(new GetValueMsg(key), getSelf());
+                }
+                // Send announceJoiningNodeMsg
+                for (Peer peer : peers) {
+                    peer.getActor().tell(new AnnounceJoiningNodeMsg(this.getID(), items), getSelf());
+                }
+
             }
 
-            List<Item> items = new ArrayList<>();
 
-            // Creating  Enumeration interface and get keys() from Hashtable
-            Enumeration<Integer> e = storage.keys();
 
-            // Checking for next element in Hashtable object with the help of hasMoreElements() method
-            while (e.hasMoreElements()) {
-
-                // Getting the key of a particular entry
-                int key = e.nextElement();
-
-                Item i = storage.get(key);
-
-                items.add(i);
-
-                // Send a read request for every items
-                getSender().tell(new GetValueMsg(key), getSelf());
-
-            }
-
-            // Send announceJoiningNodeMsg
-            for (Peer peer : peers) {
-                peer.getActor().tell(new AnnounceJoiningNodeMsg(this.getID(), items), getSelf());
-            }
 
         }
 
         public void onAnnounceJoiningNodeMsg(AnnounceJoiningNodeMsg msg) {
-
+            System.out.println("Node " + this.id + " received joining announement");
             // Update the list of peers
-            peers.add(new Peer(msg.joiningNodeKey, getSender()));
-            
-            // TODO SORT PEERS
-
+            if (this.id != msg.joiningNodeKey) {
+                addPeer(new Peer(msg.joiningNodeKey, getSender()));
+            }
+            /*
+            if(this.id == 15) {
+                System.out.println("STAMPO I PEERS DEL NODO APPENA AGGIUNTO");
+                for (Peer p : peers) {
+                    System.out.println(p.getID());
+                }
+            }
+             */
             // Find common items
             List<Item> commonItems = new ArrayList<>();
 
@@ -707,15 +755,13 @@ public class Ring {
                 }
 
                 // Check if you are among the N nodes that can hold the item
-                if (!((my_index >= indexOfFirstNode && my_index < indexOfFirstNode + N) || (my_index <= indexOfFirstNode && my_index < ((indexOfFirstNode + N) % peers.size())))) {
+                if (!((my_index >= indexOfFirstNode && my_index < indexOfFirstNode + N) || (my_index <= indexOfFirstNode && my_index < ((indexOfFirstNode + N) % peers.size()) && ((indexOfFirstNode + N) % peers.size()) < indexOfFirstNode))) {
                     this.storage.remove(i.getKey());
+                    System.out.println("Node " + this.id + " removed item with key " + i.getKey());
                 }
 
             }
-
             printNode();
-
-            
         }
 
 
@@ -740,6 +786,7 @@ public class Ring {
                     .match(GetNeighborItemsMsg.class, this::onGetNeighborItemsMsg)
                     .match(SendItemsListMsg.class, this::onSendItemsListMsg)
                     .match(AnnounceJoiningNodeMsg.class, this::onAnnounceJoiningNodeMsg)
+                    .match(ReturnValueMsg.class, this::onReturnValueMsg)
                     .build();
         }
     }

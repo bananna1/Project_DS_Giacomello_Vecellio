@@ -18,7 +18,6 @@ public class Peer {
         }
 
         public ActorRef getActor() {
-            
             return this.actor;
         }
 

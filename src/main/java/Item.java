@@ -1,15 +1,16 @@
 public class Item {
+    private int key;
     private String value;
     private int version;
-    private int key;
+
 
     private boolean lockedUpdate = false;
     private int nLockedRead = 0;
 
-    public Item (String value, int version, int key) {
+    public Item (int key, String value, int version) {
+        this.key = key;
         this.value = value;
         this.version = version;
-        this.key = key;
     }
 
     public int getVersion () {
