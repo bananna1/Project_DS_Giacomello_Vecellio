@@ -305,12 +305,24 @@ public class Ring {
 
             // Creating  Enumeration interface and get keys() from Hashtable
             Enumeration<Integer> e = storage.keys();
+            if (this.id == 15) {
+                System.out.println("CHIAVI CONTENUTE NEL NODO 15");
+            }
+            else if (this.id == 20) {
+                System.out.println("CHIAVI CONTENUTE NEL NODO 20");
+            }
 
             // Checking for next element in Hashtable object with the help of hasMoreElements() method
             while (e.hasMoreElements()) {
 
                 // Getting the key of a particular entry
                 int key = e.nextElement();
+                if (this.id == 15) {
+                    System.out.println("Chiave 15 " + key);
+                }
+                else if (this.id == 20) {
+                    System.out.println("Chiave 20 " + key);
+                }
     
                 // Print and display the key and item
                 Item i = storage.get(key);
@@ -360,7 +372,7 @@ public class Ring {
         }
 
         private void onRequestAccessMsg(RequestAccessMsg msg) {
-            System.out.println("Access requested");
+            //System.out.println("Access requested");
             Item i = storage.get(msg.request.getKey());
             ActorRef coordinator = getSender();
             boolean accessGranted = false;
@@ -369,7 +381,7 @@ public class Ring {
                 if(!i.isLockedUpdate()){
                     i.lockRead();
                     accessGranted = true;
-                    System.out.println("Access granted for read operation - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
+                    //System.out.println("Access granted for read operation - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
                 }
             }
             else { //UPDATE
@@ -604,11 +616,11 @@ public class Ring {
         }
 
         public void onJoinRequestMsg(JoinRequestMsg msg) {
-            System.out.println("SONO QUA");
+            //System.out.println("SONO QUA");
             // Error message if the key already exists
             boolean alreadyTaken = false;
             for(Peer peer : peers){
-                System.out.println("Id peer: " + peer.getID());
+                //System.out.println("Id peer: " + peer.getID());
                 if(peer.getID() == msg.joiningPeer.getID()) {
                     getSender().tell(new ErrorMsg("This ID is already taken"), getSelf());
                     alreadyTaken = true;
@@ -617,7 +629,7 @@ public class Ring {
             }
             System.out.println("Valore di alreadyTaken: " + alreadyTaken);
             if(!alreadyTaken){
-                System.out.println("SONO QUA X2");
+                //System.out.println("SONO QUA X2");
                 // Create an external request with type::Join
                 ExternalRequest request = new ExternalRequest(msg.joiningPeer, ExternalRequestType.Join, msg.bootStrappingPeer);
                 System.out.println("BN; Join requested to node " + this.id);
@@ -661,6 +673,7 @@ public class Ring {
             // Set the storage of the joining node
             this.storage = msg.items;
             System.out.println("JN; Inserted items in storage, requesting read on each item");
+            System.out.println("STAMPO LO STORAGE DEL NUOVO NODO");
 
             // Creating  Enumeration interface and get keys() from Hashtable
             Enumeration<Integer> e = storage.keys();
@@ -670,6 +683,7 @@ public class Ring {
 
                 // Getting the key of a particular entry
                 int key = e.nextElement();
+                System.out.println(key);
 
                 // Send a read request for every items
                 getSender().tell(new GetValueMsg(key), getSelf());
@@ -682,7 +696,7 @@ public class Ring {
             VariabileProva++;
             System.out.println("Received return message for key " + msg.item.getKey() + ", value: " + msg.item.getValue() + ", version: " + msg.item.getVersion());
             // Change version if it is not updated
-            System.out.println("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA LA VERSIONE ATTUALE E': " + storage.get(msg.item.getKey()).getVersion());
+            //System.out.println("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA LA VERSIONE ATTUALE E': " + storage.get(msg.item.getKey()).getVersion());
             if(msg.item.getVersion() > storage.get(msg.item.getKey()).getVersion()) {
                 storage.put(msg.item.getKey(), msg.item);
                 System.out.println("Changed item version");
@@ -719,7 +733,7 @@ public class Ring {
         }
 
         public void onAnnounceJoiningNodeMsg(AnnounceJoiningNodeMsg msg) {
-            System.out.println("Node " + this.id + " received joining announement");
+            //System.out.println("Node " + this.id + " received joining announcement");
             // Update the list of peers
             if (this.id != msg.joiningNodeKey) {
                 addPeer(new Peer(msg.joiningNodeKey, getSender()));
@@ -731,7 +745,14 @@ public class Ring {
                     System.out.println(p.getID());
                 }
             }
+            else {
+                System.out.println("STAMPO I PEERS DEI NODI PRE-ESISTENTI");
+                for (Peer p : peers) {
+                    System.out.println(p.getID());
+                }
+            }
              */
+
             // Find common items
             List<Item> commonItems = new ArrayList<>();
 
@@ -742,22 +763,24 @@ public class Ring {
             }
 
             // First index of first node for each common item
+            int my_index = 0;
+            for (int j = 0; j < peers.size(); j++) {
+                if (this.id == peers.get(j).getID()) {
+                    my_index = j;
+                    break;
+                }
+            }
+
             for (Item i : commonItems) {
                 int indexOfFirstNode = getIndexOfFirstNode(i.getKey());
-
-                int my_index = 0;
-
-                for (int j = 0; j < peers.size(); j++) {
-                    if (this.id == peers.get(j).getID()) {
-                        my_index = j;
-                        break;
-                    }
-                }
 
                 // Check if you are among the N nodes that can hold the item
                 if (!((my_index >= indexOfFirstNode && my_index < indexOfFirstNode + N) || (my_index <= indexOfFirstNode && my_index < ((indexOfFirstNode + N) % peers.size()) && ((indexOfFirstNode + N) % peers.size()) < indexOfFirstNode))) {
                     this.storage.remove(i.getKey());
                     System.out.println("Node " + this.id + " removed item with key " + i.getKey());
+                }
+                else {
+                    System.out.println("Node " + this.id + " keeps item with key " + i.getKey());
                 }
 
             }
