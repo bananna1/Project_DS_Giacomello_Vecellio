@@ -68,10 +68,12 @@ public class DHTSystem {
 
         //group.get(2).getActor().tell(new Ring.GetValueMsg(key_prova_1), client1);
         //group.get(1).getActor().tell(new Ring.GetValueMsg(key_prova_1), client3);
-        group.get(0).getActor().tell(new Ring.UpdateValueMsg(key_prova_1, "CACCA 1"), client3);
-        group.get(2).getActor().tell(new Ring.UpdateValueMsg(key_prova_2, "CACCA 2"), client1);
+        //group.get(0).getActor().tell(new Ring.UpdateValueMsg(key_prova_1, "CACCA 1"), client3);
+        //group.get(2).getActor().tell(new Ring.UpdateValueMsg(key_prova_2, "CACCA 2"), client1);
         //group.get(4).getActor().tell(new Ring.GetValueMsg(key_prova_1), client3);
 
+        Peer p = new Peer(15, system.actorOf(Ring.Node.props(15), "peer" + 15));
+        group.get(2).getActor().tell(new Ring.JoinRequestMsg(p, group.get(2).getActor()), client3);
 
         try {
             System.out.println(">>> Press ENTER to exit <<<");
