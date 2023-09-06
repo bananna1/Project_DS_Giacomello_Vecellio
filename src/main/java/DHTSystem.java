@@ -52,8 +52,9 @@ public class DHTSystem {
          */
         keys.add(16);
         keys.add(49);
-        keys.add(62);
+        keys.add(48);
         keys.add(64);
+
 
         values.add("A");
         values.add("B");

@@ -305,24 +305,28 @@ public class Ring {
 
             // Creating  Enumeration interface and get keys() from Hashtable
             Enumeration<Integer> e = storage.keys();
+            /*
             if (this.id == 15) {
                 System.out.println("CHIAVI CONTENUTE NEL NODO 15");
             }
             else if (this.id == 20) {
                 System.out.println("CHIAVI CONTENUTE NEL NODO 20");
             }
+             */
 
             // Checking for next element in Hashtable object with the help of hasMoreElements() method
             while (e.hasMoreElements()) {
 
                 // Getting the key of a particular entry
                 int key = e.nextElement();
+                /*
                 if (this.id == 15) {
                     System.out.println("Chiave 15 " + key);
                 }
                 else if (this.id == 20) {
                     System.out.println("Chiave 20 " + key);
                 }
+                 */
     
                 // Print and display the key and item
                 Item i = storage.get(key);
@@ -776,12 +780,26 @@ public class Ring {
 
                 // Check if you are among the N nodes that can hold the item
                 if (!((my_index >= indexOfFirstNode && my_index < indexOfFirstNode + N) || (my_index <= indexOfFirstNode && my_index < ((indexOfFirstNode + N) % peers.size()) && ((indexOfFirstNode + N) % peers.size()) < indexOfFirstNode))) {
-                    this.storage.remove(i.getKey());
-                    System.out.println("Node " + this.id + " removed item with key " + i.getKey());
+                    Hashtable<Integer, Item> newStorage = new Hashtable<>();
+                    Enumeration<Integer> e = storage.keys();
+                    while (e.hasMoreElements()) {
+                        int key = e.nextElement();
+                        if (i.getKey() != key) {
+                            newStorage.put(key, storage.get(key));
+                        }
+                    }
+                    this.storage = newStorage;
+                    //Item removed_item = this.storage.remove(i.getKey());
+                    //System.out.println("NODE: " + this.id + ", KEY REMOVED: " + removed_item.getKey() + ", VALUE REMOVED: " + removed_item.getValue());
+                    //System.out.println("Node " + this.id + " removed item with key " + i.getKey());
                 }
                 else {
-                    System.out.println("Node " + this.id + " keeps item with key " + i.getKey());
+                    //System.out.println("Node " + this.id + " keeps item with key " + i.getKey());
                 }
+                if (this.id == 15) {
+                    printNode();
+                }
+
 
             }
             printNode();
