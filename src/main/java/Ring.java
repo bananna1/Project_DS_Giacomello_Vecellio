@@ -168,7 +168,23 @@ public class Ring {
         }
     }
 
+    public static class LeaveRequestMsg implements Serializable {
+        public LeaveRequestMsg() {
+        }
+    }
+    public static class AddItemToStorageMsg implements Serializable {
+        public final Item item;
+        public AddItemToStorageMsg(Item item) {
+            this.item = item;
+        }
+    }
 
+    public static class AnnounceLeavingNodeMsg implements Serializable {
+        public final int leavingNodeIndex;
+        public AnnounceLeavingNodeMsg(int index) {
+            leavingNodeIndex = index;
+        }
+    }
 
     public static class Node extends AbstractActor{
 
@@ -243,6 +259,11 @@ public class Ring {
             return index;
         }
 
+        private int getIndexOfLastNode(int key) {
+            int indexOfFirstNode = getIndexOfFirstNode(key);
+            int indexOfLastNode = (indexOfFirstNode + N - 1) % peers.size();
+            return indexOfLastNode;
+        }
         private void addPeer(Peer newPeer) {
             int newPeerPosition = 0;
             for (int i = 0; i < peers.size(); i++) {
@@ -305,28 +326,13 @@ public class Ring {
 
             // Creating  Enumeration interface and get keys() from Hashtable
             Enumeration<Integer> e = storage.keys();
-            /*
-            if (this.id == 15) {
-                System.out.println("CHIAVI CONTENUTE NEL NODO 15");
-            }
-            else if (this.id == 20) {
-                System.out.println("CHIAVI CONTENUTE NEL NODO 20");
-            }
-             */
+
 
             // Checking for next element in Hashtable object with the help of hasMoreElements() method
             while (e.hasMoreElements()) {
 
                 // Getting the key of a particular entry
                 int key = e.nextElement();
-                /*
-                if (this.id == 15) {
-                    System.out.println("Chiave 15 " + key);
-                }
-                else if (this.id == 20) {
-                    System.out.println("Chiave 20 " + key);
-                }
-                 */
     
                 // Print and display the key and item
                 Item i = storage.get(key);
@@ -336,6 +342,15 @@ public class Ring {
             printString += "}";
 
             System.out.println(printString);
+        }
+
+        public String printPeers() {
+            String s = "[";
+            for (Peer p : peers) {
+                s += p.getID() + " ";
+            }
+            s += "]";
+            return s;
         }
 
         public void onStartMessage(StartMessage msg) {
@@ -649,8 +664,6 @@ public class Ring {
             // Add myself to the list of peer
             List<Peer> updatedGroup = addPeer(new Peer(id, getSelf()), msg.group);
 
-            // TODO SORT GROUP
-
             setGroup(updatedGroup);
 
             // Find the clockwise neighbor node
@@ -796,13 +809,55 @@ public class Ring {
                 else {
                     //System.out.println("Node " + this.id + " keeps item with key " + i.getKey());
                 }
+                /*
                 if (this.id == 15) {
                     printNode();
                 }
+                 */
 
 
             }
             printNode();
+        }
+
+        public void onLeaveRequestMsg(LeaveRequestMsg msg) {
+            Enumeration<Integer> e = storage.keys();
+            // take each item in storage and tell the new node responsible for them to insert it in its storage
+            while (e.hasMoreElements()) {
+                int key = e.nextElement();
+                Item i = storage.get(key);
+                int indexOfLastNode = getIndexOfLastNode(key);
+                int newIndexOfLastnode = (indexOfLastNode + 1) % peers.size();
+                Peer newLastPeer = peers.get(newIndexOfLastnode);
+                System.out.println("Node " + peers.get(newIndexOfLastnode).getID() + " is now responsible for key " + i.getKey());
+                newLastPeer.getActor().tell(new AddItemToStorageMsg(i), getSelf());
+            }
+            // find index of leaving node
+            int leavingNodeIndex = 0;
+            for(int i = 0; i < peers.size(); i++) {
+                Peer p = peers.get(i);
+                if (p.getID() == this.id) {
+                    leavingNodeIndex = i;
+                    break;
+                }
+            }
+            for (Peer p : peers) {
+                p.getActor().tell(new AnnounceLeavingNodeMsg(leavingNodeIndex), getSelf());
+            }
+        }
+
+        public void onAddItemToStorageMsg(AddItemToStorageMsg msg) {
+            storage.put(msg.item.getKey(), msg.item);
+        }
+
+        public void onAnnounceLeavingNodeMsg(AnnounceLeavingNodeMsg msg) {
+            System.out.println("Node " + this.id + " has received announcement of node leaving");
+            boolean isMe = (peers.get(msg.leavingNodeIndex).getID() == this.id);
+            peers.remove(msg.leavingNodeIndex);
+            System.out.println("Node " + this.id + "'s peers: " + this.printPeers());
+            if(!isMe) {
+                printNode();
+            }
         }
 
 
@@ -828,6 +883,9 @@ public class Ring {
                     .match(SendItemsListMsg.class, this::onSendItemsListMsg)
                     .match(AnnounceJoiningNodeMsg.class, this::onAnnounceJoiningNodeMsg)
                     .match(ReturnValueMsg.class, this::onReturnValueMsg)
+                    .match(LeaveRequestMsg.class, this::onLeaveRequestMsg)
+                    .match(AddItemToStorageMsg.class, this::onAddItemToStorageMsg)
+                    .match(AnnounceLeavingNodeMsg.class, this::onAnnounceLeavingNodeMsg)
                     .build();
         }
     }
