@@ -6,6 +6,7 @@ import akka.actor.ActorSystem;
 import java.util.Random;
 
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 
 
 public class DHTSystem {
@@ -17,7 +18,7 @@ public class DHTSystem {
         return (char)(r.nextInt(26) + 'A');
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
         // Create the actor system
         final ActorSystem system = ActorSystem.create("DHT_System");
 
@@ -87,6 +88,11 @@ public class DHTSystem {
         //Peer p = new Peer(15, system.actorOf(Ring.Node.props(15), "peer" + 15));
         //group.get(2).getActor().tell(new Ring.JoinRequestMsg(p, group.get(2).getActor()), client3);
         //group.get(2).getActor().tell(new Ring.LeaveRequestMsg(), client1);
+
+        group.get(2).getActor().tell(new Ring.CrashRequestMsg(), client3);
+        Thread.sleep(1);
+        group.get(2).getActor().tell(new Ring.RecoveryRequestMsg(group.get(0).getActor()), client3);
+
         try {
             System.out.println(">>> Press ENTER to exit <<<");
             System.in.read();

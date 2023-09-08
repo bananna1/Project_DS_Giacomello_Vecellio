@@ -12,6 +12,7 @@ import java.util.LinkedList;
 import java.util.Queue;
 import java.util.concurrent.TimeUnit;
 
+
 import java.util.*;
 import java.util.Enumeration;
 
@@ -40,8 +41,14 @@ public class Ring {
 
     public static class GetValueMsg implements Serializable {
         public final int key;
+        public final boolean isJoin;
+        public GetValueMsg(int key, boolean isJoin) {
+            this.key = key;
+            this.isJoin = isJoin;
+        }
         public GetValueMsg(int key) {
             this.key = key;
+            this.isJoin = false;
         }
     }
 
@@ -251,7 +258,8 @@ public class Ring {
 
         public enum RequestType {
             Read,
-            Update
+            Update,
+            ReadJoin
         }
 
         public enum ExternalRequestType {
@@ -415,7 +423,12 @@ public class Ring {
             if(this.hasCrashed){ return; }
                 
             int key = msg.key;
-            Request newRequest = new Request(key, RequestType.Read, getSender(), null);
+            Request newRequest;
+
+            if(msg.isJoin == true)
+                newRequest = new Request(key, RequestType.ReadJoin, getSender(), null);
+            else
+                newRequest = new Request(key, RequestType.Read, getSender(), null);
 
             activeRequests.add(newRequest);
             setTimeout(TIMEOUT_REQUEST, newRequest.getID());
@@ -719,6 +732,7 @@ public class Ring {
             }
             System.out.println("Valore di alreadyTaken: " + alreadyTaken);
             if(!alreadyTaken){
+                VariabileProva = 0;
                 //System.out.println("SONO QUA X2");
                 // Create an external request with type::Join
                 ExternalRequest request = new ExternalRequest(msg.joiningPeer, ExternalRequestType.Join, msg.bootStrappingPeer);
@@ -780,7 +794,7 @@ public class Ring {
                 System.out.println(key);
 
                 // Send a read request for every items
-                getSender().tell(new GetValueMsg(key), getSelf());
+                getSender().tell(new GetValueMsg(key, true), getSelf());
             }
 
 
@@ -794,35 +808,43 @@ public class Ring {
             System.out.println("Received return message for key " + msg.item.getKey() + ", value: " + msg.item.getValue() + ", version: " + msg.item.getVersion());
             // Change version if it is not updated
             //System.out.println("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA LA VERSIONE ATTUALE E': " + storage.get(msg.item.getKey()).getVersion());
-            if(msg.item.getVersion() > storage.get(msg.item.getKey()).getVersion()) {
+            if(storage.containsKey(msg.item.getKey())){
+                if(msg.item.getVersion() > storage.get(msg.item.getKey()).getVersion()) {
+                    storage.put(msg.item.getKey(), msg.item);
+                    System.out.println("Changed item version");
+                }
+            } else {
                 storage.put(msg.item.getKey(), msg.item);
-                System.out.println("Changed item version");
             }
+            
+
             if(VariabileProva == storage.size()) {
-                List<Item> items = new ArrayList<>();
+                if(msg.requestType == RequestType.ReadJoin){
+                    List<Item> items = new ArrayList<>();
 
-                // Creating  Enumeration interface and get keys() from Hashtable
-                Enumeration<Integer> e = storage.keys();
+                    // Creating  Enumeration interface and get keys() from Hashtable
+                    Enumeration<Integer> e = storage.keys();
 
-                // Checking for next element in Hashtable object with the help of hasMoreElements() method
-                while (e.hasMoreElements()) {
+                    // Checking for next element in Hashtable object with the help of hasMoreElements() method
+                    while (e.hasMoreElements()) {
 
-                    // Getting the key of a particular entry
-                    int key = e.nextElement();
+                        // Getting the key of a particular entry
+                        int key = e.nextElement();
 
-                    Item i = storage.get(key);
+                        Item i = storage.get(key);
 
-                    items.add(i);
+                        items.add(i);
 
-                    // Send a read request for every item
-                    //getSender().tell(new GetValueMsg(key), getSelf());
+                    }
+
+                    // Send announceJoiningNodeMsg
+                    for (Peer peer : peers) {
+                        peer.getActor().tell(new AnnounceJoiningNodeMsg(this.getID(), items), getSelf());
+                    }
                 }
-                // Send announceJoiningNodeMsg
-                for (Peer peer : peers) {
-                    peer.getActor().tell(new AnnounceJoiningNodeMsg(this.getID(), items), getSelf());
-                }
-
             }
+
+            printNode();
 
         }
 
@@ -965,9 +987,12 @@ public class Ring {
 
             // Check if the node has really crashed
             if(!hasCrashed){ 
+                VariabileProva = 0;
                 getSender().tell(new ErrorMsg("This node is not crashed"), getSelf());
                 return;
             }
+
+            hasCrashed = false;
 
             msg.nodeToContact.tell(new GetPeerListMsg(), getSelf());
 
@@ -975,7 +1000,7 @@ public class Ring {
 
         public void onGetPeerListMsg(GetPeerListMsg msg) {
 
-            getSender().tell(new SendPeerListMsg(Collections.unmodifiableList(new ArrayList<>(this.peers))), getSelf());
+            getSender().tell(new SendPeerListRecoveryMsg(Collections.unmodifiableList(new ArrayList<>(this.peers))), getSelf());
 
         }
 
@@ -1010,6 +1035,7 @@ public class Ring {
                         int key1 = e.nextElement();
                         if (key != key1) {
                             newStorage.put(key1, storage.get(key1));
+                            System.out.println("HO TENUTO: " + key1);
                         }
                     }
 
@@ -1017,39 +1043,55 @@ public class Ring {
                 }
             }
 
-
-            // Requests the items it became responsible for
-            for(Peer p: peers){
-                if(id != p.getID()) {
-                    p.getActor().tell(new GetItemsListMsg(), getSelf());
-                }
-            }
             
 
+            int antiClockwiseNeighbor = my_index - 1;
+            if(antiClockwiseNeighbor == -1) {
+                antiClockwiseNeighbor = peers.size() - 1;
+            }
+
+            // Requests the items it became responsible for to the anti clockwise node
+            peers.get(antiClockwiseNeighbor).getActor().tell(new GetItemsListMsg(this.getID()), getSelf());
+            
         }
         
         public void onGetItemsListMsg(GetItemsListMsg msg){
 
-            Hashtable<Integer, Item> newStorage = new Hashtable<>();
-            Enumeration<Integer> e = storage.keys();
-            
-            while (e.hasMoreElements()) {
-                int key = e.nextElement();
-                
-                int indexOfFirstNode = getIndexOfFirstNode(key);
-
-                if (((msg.recoveryNodeID >= indexOfFirstNode && msg.recoveryNodeID < indexOfFirstNode + N) || (msg.recoveryNodeID <= indexOfFirstNode && msg.recoveryNodeID < ((indexOfFirstNode + N) % peers.size()) && ((indexOfFirstNode + N) % peers.size()) < indexOfFirstNode))) {
-                    newStorage.put(key, storage.get(key));
-                }
-            
-            }
-
-            getSender().tell(new SendItemsListRecoveryMsg(newStorage), getSelf());
+            getSender().tell(new SendItemsListRecoveryMsg(this.storage), getSelf());
 
         }
 
         public void onSendItemsListRecoveryMsg(SendItemsListRecoveryMsg msg){
+
+            int my_index = 0;
+            for (int j = 0; j < peers.size(); j++) {
+                if (this.id == peers.get(j).getID()) {
+                    my_index = j;
+                    break;
+                }
+            }
+
+            Enumeration<Integer> e = msg.items.keys();
+
+            while (e.hasMoreElements()) {
+                int key = e.nextElement();
+
+                int indexOfFirstNode = getIndexOfFirstNode(key);
+
+                if ((my_index >= indexOfFirstNode && my_index < indexOfFirstNode + N) || (my_index <= indexOfFirstNode && my_index < ((indexOfFirstNode + N) % peers.size()) && ((indexOfFirstNode + N) % peers.size()) < indexOfFirstNode)) {
+                    
+                    this.storage.put(key, msg.items.get(key));
+                }
+            }
+
+            Enumeration<Integer> en = msg.items.keys();
             
+            while (en.hasMoreElements()) {
+                int key = en.nextElement();
+                getSender().tell(new GetValueMsg(key, false), getSelf());
+            }
+
+            //printNode();
         }
 
         @SuppressWarnings("unchecked")

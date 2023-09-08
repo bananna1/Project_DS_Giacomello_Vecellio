@@ -20,10 +20,12 @@ public class Request {
         this.id = ++count;
     }
 
+
     public int getKey () {
         return key;
     }
-    
+
+        
     public Ring.Node.RequestType getType () {
         return type;
     }
