@@ -186,6 +186,46 @@ public class Ring {
         }
     }
 
+    public static class CrashRequestMsg implements Serializable {
+        public CrashRequestMsg() {
+
+        }
+    }
+
+    public static class RecoveryRequestMsg implements Serializable {
+        public final ActorRef nodeToContact;
+        public RecoveryRequestMsg(ActorRef nodeToContact) {
+            this.nodeToContact = nodeToContact;
+        }
+    }
+
+    public static class GetPeerListMsg implements Serializable {
+        public GetPeerListMsg() {
+
+        } 
+    }
+
+    public static class SendPeerListRecoveryMsg implements Serializable {
+        public final List<Peer> group;
+        public SendPeerListRecoveryMsg(List<Peer> group) {
+            this.group = Collections.unmodifiableList(new ArrayList<>(group));
+        }
+    }
+
+    public static class GetItemsListMsg implements Serializable {
+        public final int recoveryNodeID;
+        public GetItemsListMsg(int recoveryNodeID) {
+            this.recoveryNodeID = recoveryNodeID;
+        }
+    }
+
+    public static class SendItemsListRecoveryMsg implements Serializable {
+        public final Hashtable<Integer, Item> items;
+        public SendItemsListRecoveryMsg(Hashtable<Integer, Item> items){
+            this.items = items;
+        }
+    }
+
     public static class Node extends AbstractActor{
 
         private int id;                                                         // Node ID
@@ -206,6 +246,8 @@ public class Ring {
         public final int TIMEOUT_DEQUEUE = 2000;
         public final int read_quorum = N / 2 + 1;
         public final int write_quorum = N / 2 + 1;
+
+        private boolean hasCrashed = false;
 
         public enum RequestType {
             Read,
@@ -369,7 +411,9 @@ public class Ring {
         }
 
         private void onGetValueMsg(GetValueMsg msg) {
-            
+
+            if(this.hasCrashed){ return; }
+                
             int key = msg.key;
             Request newRequest = new Request(key, RequestType.Read, getSender(), null);
 
@@ -380,6 +424,8 @@ public class Ring {
 
         private void onUpdateValueMsg(UpdateValueMsg msg){
             
+            if(this.hasCrashed){ return; }
+
             int key = msg.key;
             String value = msg.value;
             Request newRequest = new Request(key, RequestType.Update, getSender(), value);
@@ -391,6 +437,9 @@ public class Ring {
         }
 
         private void onRequestAccessMsg(RequestAccessMsg msg) {
+
+            if(this.hasCrashed){ return; }
+
             //System.out.println("Access requested");
             Item i = storage.get(msg.request.getKey());
             ActorRef coordinator = getSender();
@@ -422,6 +471,9 @@ public class Ring {
         }
 
         private void onAccessResponseMsg(AccessResponseMsg msg) {
+
+            if(this.hasCrashed){ return; }               
+
             // RICHIESTA SODDISFATTA
             if (msg.accessGranted) {
                 int key = msg.request.getKey();
@@ -445,6 +497,9 @@ public class Ring {
         }
 
         private void onRequestValueMsg(RequestValueMsg msg) {
+
+            if(this.hasCrashed){ return; }
+
             Item i = storage.get(msg.request.getKey());
             ActorRef sender = getSender();
             RequestType requestType = msg.request.getType();
@@ -453,6 +508,9 @@ public class Ring {
         }
 
         private void onValueResponseMsg(ValueResponseMsg msg) {
+
+            if(this.hasCrashed){ return; }
+
             if (activeRequests.contains(msg.request)) {
                 msg.request.incrementnResponses();
                 //System.out.println("Response message n. " + msg.request.getnResponses() + " - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
@@ -516,6 +574,9 @@ public class Ring {
         }
 
         public void onChangeValueMsg(ChangeValueMsg msg) {
+
+            if(this.hasCrashed){ return; }
+
             Item newItem = new Item(msg.request.getKey(), msg.request.getNewValue(), msg.newVersion);
             this.storage.put(msg.request.getKey(), newItem);
             //System.out.println("New item - key: " + msg.request.getKey() + ", new value: " + storage.get(msg.request.getKey()).getValue() + ", current version: " + storage.get(msg.request.getKey()).getVersion());
@@ -523,6 +584,9 @@ public class Ring {
         }
 
         public void onUnlockMsg(UnlockMsg msg) {
+
+            if(this.hasCrashed){ return; }
+
             int key = msg.request.getKey();
             if (msg.request.getType() == RequestType.Read) {
                 this.storage.get(key).unlockRead();
@@ -537,6 +601,9 @@ public class Ring {
         }
 
         public void onOkMsg(OkMsg msg) {
+
+            if(this.hasCrashed){ return; }
+
             // Nota: OkMsg riguarda solo le update requests, quindi non serve differenziare i casi in base al tipo di richiesta
             if (pendingRequests.contains(msg.request)) {
                 msg.request.incrementOkResponses();
@@ -547,7 +614,7 @@ public class Ring {
             }
         }
 
-        void setTimeout(int time, int id_request) {
+        private void setTimeout(int time, int id_request) {
             getContext().system().scheduler().scheduleOnce(
                     Duration.create(time, TimeUnit.MILLISECONDS),
                     getSelf(),
@@ -555,7 +622,7 @@ public class Ring {
                     getContext().system().dispatcher(), getSelf()
             );
         }
-        void setTimeoutDequeue(int time) {
+        private void setTimeoutDequeue(int time) {
             getContext().system().scheduler().scheduleOnce(
                     Duration.create(time, TimeUnit.MILLISECONDS),
                     getSelf(),
@@ -563,6 +630,7 @@ public class Ring {
                     getContext().system().dispatcher(), getSelf()
             );
         }
+
         public void onTimeoutDequeue(TimeoutDequeue msg) {
             //System.out.println("SONO NEL TIMEOUT DEQUEUEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE");
             while (!this.requestQueue.isEmpty()) {
@@ -635,6 +703,9 @@ public class Ring {
         }
 
         public void onJoinRequestMsg(JoinRequestMsg msg) {
+
+            if(this.hasCrashed){ return; }
+
             //System.out.println("SONO QUA");
             // Error message if the key already exists
             boolean alreadyTaken = false;
@@ -661,6 +732,8 @@ public class Ring {
 
         public void onSendPeerListMsg(SendPeerListMsg msg) {
 
+            if(this.hasCrashed){ return; }
+
             // Add myself to the list of peer
             List<Peer> updatedGroup = addPeer(new Peer(id, getSelf()), msg.group);
 
@@ -680,12 +753,16 @@ public class Ring {
 
         public void onGetNeighborItemsMsg(GetNeighborItemsMsg msg){
 
+            if(this.hasCrashed){ return; }
+
             // Send message to the joining node with the items list
             System.out.println("NN; Received request to retrieve items");
             getSender().tell(new SendItemsListMsg(storage), getSelf());
         }
         
         public void onSendItemsListMsg(SendItemsListMsg msg) {
+
+            if(this.hasCrashed){ return; }
 
             // Set the storage of the joining node
             this.storage = msg.items;
@@ -710,6 +787,9 @@ public class Ring {
 
         }
         public void onReturnValueMsg(ReturnValueMsg msg) {
+
+            if(this.hasCrashed){ return; }
+
             VariabileProva++;
             System.out.println("Received return message for key " + msg.item.getKey() + ", value: " + msg.item.getValue() + ", version: " + msg.item.getVersion());
             // Change version if it is not updated
@@ -744,12 +824,12 @@ public class Ring {
 
             }
 
-
-
-
         }
 
         public void onAnnounceJoiningNodeMsg(AnnounceJoiningNodeMsg msg) {
+
+            if(this.hasCrashed){ return; }
+
             //System.out.println("Node " + this.id + " received joining announcement");
             // Update the list of peers
             if (this.id != msg.joiningNodeKey) {
@@ -795,6 +875,7 @@ public class Ring {
                 if (!((my_index >= indexOfFirstNode && my_index < indexOfFirstNode + N) || (my_index <= indexOfFirstNode && my_index < ((indexOfFirstNode + N) % peers.size()) && ((indexOfFirstNode + N) % peers.size()) < indexOfFirstNode))) {
                     Hashtable<Integer, Item> newStorage = new Hashtable<>();
                     Enumeration<Integer> e = storage.keys();
+
                     while (e.hasMoreElements()) {
                         int key = e.nextElement();
                         if (i.getKey() != key) {
@@ -821,7 +902,11 @@ public class Ring {
         }
 
         public void onLeaveRequestMsg(LeaveRequestMsg msg) {
+
+            if(this.hasCrashed){ return; }
+
             Enumeration<Integer> e = storage.keys();
+
             // take each item in storage and tell the new node responsible for them to insert it in its storage
             while (e.hasMoreElements()) {
                 int key = e.nextElement();
@@ -832,6 +917,7 @@ public class Ring {
                 System.out.println("Node " + peers.get(newIndexOfLastnode).getID() + " is now responsible for key " + i.getKey());
                 newLastPeer.getActor().tell(new AddItemToStorageMsg(i), getSelf());
             }
+
             // find index of leaving node
             int leavingNodeIndex = 0;
             for(int i = 0; i < peers.size(); i++) {
@@ -847,10 +933,16 @@ public class Ring {
         }
 
         public void onAddItemToStorageMsg(AddItemToStorageMsg msg) {
+
+            if(this.hasCrashed){ return; }
+
             storage.put(msg.item.getKey(), msg.item);
         }
 
         public void onAnnounceLeavingNodeMsg(AnnounceLeavingNodeMsg msg) {
+
+            if(this.hasCrashed){ return; }
+
             System.out.println("Node " + this.id + " has received announcement of node leaving");
             boolean isMe = (peers.get(msg.leavingNodeIndex).getID() == this.id);
             peers.remove(msg.leavingNodeIndex);
@@ -860,6 +952,105 @@ public class Ring {
             }
         }
 
+        public void onCrashRequestMsg(CrashRequestMsg msg) {
+            // TODO decidere se fare i controlli anche su leave e join
+            this.hasCrashed = true;
+
+            System.out.println("Node " + this.getID() + " has crashed");
+        }
+
+        public void onRecoveryRequestMsg(RecoveryRequestMsg msg) {
+
+            // TODO decidere se controllare se vengono fatti read e update
+
+            // Check if the node has really crashed
+            if(!hasCrashed){ 
+                getSender().tell(new ErrorMsg("This node is not crashed"), getSelf());
+                return;
+            }
+
+            msg.nodeToContact.tell(new GetPeerListMsg(), getSelf());
+
+        }
+
+        public void onGetPeerListMsg(GetPeerListMsg msg) {
+
+            getSender().tell(new SendPeerListMsg(Collections.unmodifiableList(new ArrayList<>(this.peers))), getSelf());
+
+        }
+
+        public void onSendPeerListRecoveryMsg(SendPeerListRecoveryMsg msg) {
+
+            this.peers = msg.group;
+
+            // Forgets the items it is no longer responsible for
+
+            // First index of first node for each item of the node
+            int my_index = 0;
+            for (int j = 0; j < peers.size(); j++) {
+                if (this.id == peers.get(j).getID()) {
+                    my_index = j;
+                    break;
+                }
+            }
+
+
+            Enumeration<Integer> en = storage.keys();
+            while (en.hasMoreElements()) {
+                int key = en.nextElement();
+                
+                int indexOfFirstNode = getIndexOfFirstNode(key);
+
+                // Check if you are among the N nodes that can hold the item
+                if (!((my_index >= indexOfFirstNode && my_index < indexOfFirstNode + N) || (my_index <= indexOfFirstNode && my_index < ((indexOfFirstNode + N) % peers.size()) && ((indexOfFirstNode + N) % peers.size()) < indexOfFirstNode))) {
+                    Hashtable<Integer, Item> newStorage = new Hashtable<>();
+                    Enumeration<Integer> e = storage.keys();
+
+                    while (e.hasMoreElements()) {
+                        int key1 = e.nextElement();
+                        if (key != key1) {
+                            newStorage.put(key1, storage.get(key1));
+                        }
+                    }
+
+                    this.storage = newStorage;
+                }
+            }
+
+
+            // Requests the items it became responsible for
+            for(Peer p: peers){
+                if(id != p.getID()) {
+                    p.getActor().tell(new GetItemsListMsg(), getSelf());
+                }
+            }
+            
+
+        }
+        
+        public void onGetItemsListMsg(GetItemsListMsg msg){
+
+            Hashtable<Integer, Item> newStorage = new Hashtable<>();
+            Enumeration<Integer> e = storage.keys();
+            
+            while (e.hasMoreElements()) {
+                int key = e.nextElement();
+                
+                int indexOfFirstNode = getIndexOfFirstNode(key);
+
+                if (((msg.recoveryNodeID >= indexOfFirstNode && msg.recoveryNodeID < indexOfFirstNode + N) || (msg.recoveryNodeID <= indexOfFirstNode && msg.recoveryNodeID < ((indexOfFirstNode + N) % peers.size()) && ((indexOfFirstNode + N) % peers.size()) < indexOfFirstNode))) {
+                    newStorage.put(key, storage.get(key));
+                }
+            
+            }
+
+            getSender().tell(new SendItemsListRecoveryMsg(newStorage), getSelf());
+
+        }
+
+        public void onSendItemsListRecoveryMsg(SendItemsListRecoveryMsg msg){
+            
+        }
 
         @SuppressWarnings("unchecked")
         @Override
@@ -886,6 +1077,12 @@ public class Ring {
                     .match(LeaveRequestMsg.class, this::onLeaveRequestMsg)
                     .match(AddItemToStorageMsg.class, this::onAddItemToStorageMsg)
                     .match(AnnounceLeavingNodeMsg.class, this::onAnnounceLeavingNodeMsg)
+                    .match(CrashRequestMsg.class, this::onCrashRequestMsg)
+                    .match(RecoveryRequestMsg.class, this::onRecoveryRequestMsg)
+                    .match(GetPeerListMsg.class, this::onGetPeerListMsg)
+                    .match(SendPeerListRecoveryMsg.class, this::onSendPeerListRecoveryMsg)
+                    .match(GetItemsListMsg.class, this::onGetItemsListMsg)
+                    .match(SendItemsListRecoveryMsg.class, this::onSendItemsListRecoveryMsg)
                     .build();
         }
     }
