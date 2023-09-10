@@ -89,9 +89,10 @@ public class DHTSystem {
         //group.get(2).getActor().tell(new Ring.JoinRequestMsg(p, group.get(2).getActor()), client3);
         //group.get(2).getActor().tell(new Ring.LeaveRequestMsg(), client1);
 
-        group.get(2).getActor().tell(new Ring.CrashRequestMsg(), client3);
-        Thread.sleep(1);
-        group.get(2).getActor().tell(new Ring.RecoveryRequestMsg(group.get(0).getActor()), client3);
+        group.get(5).getActor().tell(new Ring.CrashRequestMsg(), client3);
+        Thread.sleep(2000);
+        group.get(1).getActor().tell(new Ring.RecoveryRequestMsg(group.get(0).getActor()), client3);
+        group.get(5).getActor().tell(new Ring.RecoveryRequestMsg(group.get(0).getActor()), client3);
 
         try {
             System.out.println(">>> Press ENTER to exit <<<");
