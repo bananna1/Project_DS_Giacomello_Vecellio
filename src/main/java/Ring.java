@@ -468,11 +468,9 @@ public class Ring {
             }
             else { //UPDATE
                 // SE NON CI SONO READ DELL'ITEM O UPDATE DELL'ITEM, ACCESS GRANTED
-                /*
                 if (i == null) {
-                    i = new Item(msg.request.getKey(), msg.request.getNewValue(), 1);
+                    i = new Item(msg.request.getKey(), "", 0); // version 0 is useful to identify that the item is new
                 }
-                 */
                 accessGranted = i.lockUpdate();
                 System.out.println("Access granted for update operation - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
 
@@ -518,6 +516,9 @@ public class Ring {
             if(this.hasCrashed){ return; }
 
             Item i = storage.get(msg.request.getKey());
+            if (i == null) {
+                i = new Item(msg.request.getKey(), "", 0);
+            }
             ActorRef sender = getSender();
             RequestType requestType = msg.request.getType();
             //System.out.println("value requested - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
@@ -564,14 +565,16 @@ public class Ring {
                         //System.out.println("HO RAGGIUNTO IL WRITE QUORUM");
                         msg.request.getClient().tell(new ReturnValueMsg(currBest, msg.request.getID(), msg.request.getType()), getSelf());
                         int index = getIndexOfFirstNode(msg.request.getKey());
-                        int newVersion;
-                        if (currBest == null) {
+                        int newVersion = currBest.getVersion();
+                        /*
+                        if (currBest.getVersion() == 0) {
                             newVersion = 1;
                         }
                         else {
                             newVersion = currBest.getVersion() + 1;
                             //System.out.println("STO AGGIORNANDO LA VERSIONE " + newVersion);
                         }
+                         */
 
                         for (int i = index; i < N + index; i++) {
                             int length = peers.size();
@@ -597,6 +600,7 @@ public class Ring {
             Item newItem = new Item(msg.request.getKey(), msg.request.getNewValue(), msg.newVersion);
             this.storage.put(msg.request.getKey(), newItem);
             //System.out.println("New item - key: " + msg.request.getKey() + ", new value: " + storage.get(msg.request.getKey()).getValue() + ", current version: " + storage.get(msg.request.getKey()).getVersion());
+            printNode();
             getSender().tell(new OkMsg(msg.request), getSelf());
         }
 
@@ -625,6 +629,8 @@ public class Ring {
             if (pendingRequests.contains(msg.request)) {
                 msg.request.incrementOkResponses();
                 if (msg.request.getOkResponses() >= write_quorum) {
+                    for (Peer p : peers) {
+                    }
                     msg.request.getOwner().tell(new UnlockMsg(msg.request), getSelf());
                     this.pendingRequests.remove(msg.request);
                 }
