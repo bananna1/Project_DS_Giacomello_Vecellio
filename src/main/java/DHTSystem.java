@@ -4,9 +4,7 @@ import java.util.List;
 import akka.actor.ActorRef;
 import akka.actor.ActorSystem;
 import java.util.Random;
-
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.TimeUnit;
+import java.util.Scanner;
 
 
 public class DHTSystem {
@@ -18,7 +16,7 @@ public class DHTSystem {
         return (char)(r.nextInt(26) + 'A');
     }
 
-    public static void main(String[] args) throws InterruptedException {
+    public static void main(String[] args) throws InterruptedException, NumberFormatException, IOException {
         // Create the actor system
         final ActorSystem system = ActorSystem.create("DHT_System");
 
@@ -95,12 +93,89 @@ public class DHTSystem {
         group.get(5).getActor().tell(new Ring.RecoveryRequestMsg(group.get(0).getActor()), client3);
          */
         //group.get(1).getActor().tell(new Ring.UpdateValueMsg(27, "ciao"), client1);
-        try {
-            System.out.println(">>> Press ENTER to exit <<<");
-            System.in.read();
-        } 
-        catch (IOException ignored) {}
-        system.terminate();
+        
+        System.out.println(">>> Press ENTER send the command <<<");
+        System.out.println(">>> Press 1 to read <<<");
+        System.out.println(">>> Press 2 to update <<<");
+        System.out.println(">>> Press 3 to join <<<");
+        System.out.println(">>> Press 4 to leave <<<");
+        System.out.println(">>> Press 5 to crash <<<");
+        System.out.println(">>> Press 6 to recover <<<");
+        System.out.println(">>> Press 7 to exit <<<");
+        
+        
+        //BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
 
+        // Reading data using readLine
+        while(true){
+            Scanner in = new Scanner(System.in);
+            int action = in.nextInt();
+            System.out.println(action);
+            int key;
+            String value;
+            
+            switch (action) {
+                case 1:
+                    group.get(2).getActor().tell(new Ring.GetValueMsg(requestKey()), client1);
+                    break;
+                case 2:                                
+                    group.get(0).getActor().tell(new Ring.UpdateValueMsg(requestKey(), requestValue()), client3);
+                    break;
+                case 3:
+                    System.out.println("Insert the ID of the joining node");
+                    int id = in.nextInt();
+                    Peer p = new Peer(id, system.actorOf(Ring.Node.props(id), "peer" + id));
+                    group.get(2).getActor().tell(new Ring.JoinRequestMsg(p, group.get(2).getActor()), client3);
+                    break;
+                case 4:
+                    group.get(requestID()).getActor().tell(new Ring.LeaveRequestMsg(), client1);
+                    break;
+                case 5:
+                    group.get(requestID()).getActor().tell(new Ring.CrashRequestMsg(), client3);
+                    break;
+                case 6: 
+                    group.get(1).getActor().tell(new Ring.RecoveryRequestMsg(group.get(requestID()).getActor()), client3);
+                    break;
+                case 7:
+                    system.terminate();
+                    break;
+                default:
+                    System.out.println("Insert a value from 1 to 7");
+                    break;
+           
+
+            }
+
+        }
+            
+
+    }
+
+    private static int requestKey() {
+        Scanner in = new Scanner(System.in);
+        
+        System.out.println("Insert the key of the value to read");
+        return in.nextInt();
+    }
+
+    private static String requestValue() {
+        Scanner in = new Scanner(System.in);
+        
+        System.out.println("Insert the value");
+        return in.nextLine();
+    }
+    
+    private static int requestID(){
+        Scanner in = new Scanner(System.in);
+        
+        System.out.println("Insert the ID of the leaving node");
+        int id = in.nextInt();
+
+        while (id < 0 || id >= N_PARTICIPANTS){
+            System.out.println("Insert the ID of the leaving node");
+            id = in.nextInt();
+        }
+
+        return id;
     }
 }
