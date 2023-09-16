@@ -125,15 +125,21 @@ public class Ring {
         }
     }
 
-    public static class Timeout implements Serializable {
+    public static class TimeoutRequest implements Serializable {
         public final int id_request;
-        public Timeout(int id_request) {
+        public TimeoutRequest(int id_request) {
             this.id_request = id_request;
         }
     }
 
     public static class TimeoutDequeue implements Serializable {
         public TimeoutDequeue() {
+        }
+    }
+    public static class TimeoutJoin implements Serializable {
+        public final ExternalRequest request;
+        public TimeoutJoin(ExternalRequest request) {
+           this.request = request;
         }
     }
 
@@ -247,10 +253,12 @@ public class Ring {
 
         private int VariabileProva = 0;  // serve in caso di join a sapere quanti messaggi di return hai ricevuto dai read così puoi fare l'announce agli altri nodi
 
+        private ExternalRequest currJoiningNodeRequest = null;
         public final int N = 4;
 
         public final int TIMEOUT_REQUEST = 5000;
         public final int TIMEOUT_DEQUEUE = 2000;
+        public final int TIMEOUT_JOIN = 5000;
         public final int read_quorum = N / 2 + 1;
         public final int write_quorum = N / 2 + 1;
 
@@ -346,11 +354,15 @@ public class Ring {
             return newList;
         }
 
-        static public Props props(int id) {
-            return Props.create(Node.class, () -> new Node(id));
+        private boolean isNodeResponsibleForItem(int indexOfFirstNode) {
+            int myIndex = getMyIndex();
+            if ((myIndex >= indexOfFirstNode && myIndex < indexOfFirstNode + N) || (myIndex <= indexOfFirstNode && myIndex < ((indexOfFirstNode + N) % peers.size()) && ((indexOfFirstNode + N) % peers.size()) < indexOfFirstNode)) {
+                return true;
+            }
+            return false;
         }
 
-        private void setInitialStorage(List<Integer> keys, List<String> values){
+        private int getMyIndex() {
             int my_index = 0;
 
             for (int j = 0; j < peers.size(); j++) {
@@ -359,13 +371,19 @@ public class Ring {
                     break;
                 }
             }
-            for(int i = 0; i < keys.size(); i++) {
-                int index = getIndexOfFirstNode(keys.get(i));
-                //System.out.println(keys.get(i) + " " + index);
+            return my_index;
+        }
 
-                if ((my_index >= index && my_index < index + N) || (my_index <= index && my_index < ((index + N) % peers.size()) && ((index + N) % peers.size()) < index)) {
+        static public Props props(int id) {
+            return Props.create(Node.class, () -> new Node(id));
+        }
+
+        private void setInitialStorage(List<Integer> keys, List<String> values){
+            for(int i = 0; i < keys.size(); i++) {
+                if (isNodeResponsibleForItem(keys.get(i))) {
                     this.storage.put(keys.get(i), new Item(keys.get(i), values.get(i), 1));
                 }
+
             }
             printNode();
         }
@@ -461,9 +479,13 @@ public class Ring {
                 //SE NON CI SONO UPDATE, ACCCESS GRANTED
                 if (i == null) {
                     msg.request.getClient().tell(new ErrorMsg("Error message for Read Request - request id: " + msg.request.getID() + ", key: " + msg.request.getKey() + ". Item not found"), getSelf());
+                    accessGranted = false;
+                    // TODO TROVARE UN MODO PER RIMUOVERE DEFINITIVAMENTE LA RICHIESTA
                 }
-                accessGranted = i.lockRead();
-                //System.out.println("Access granted for read operation - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
+                else {
+                    accessGranted = i.lockRead();
+                    //System.out.println("Access granted for read operation - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
+                }
 
             }
             else { //UPDATE
@@ -641,10 +663,19 @@ public class Ring {
             getContext().system().scheduler().scheduleOnce(
                     Duration.create(time, TimeUnit.MILLISECONDS),
                     getSelf(),
-                    new Timeout(id_request), // the message to send
+                    new TimeoutRequest(id_request), // the message to send
                     getContext().system().dispatcher(), getSelf()
             );
         }
+        private void setTimeoutJoin(int time, ExternalRequest request) {
+            getContext().system().scheduler().scheduleOnce(
+                    Duration.create(time, TimeUnit.MILLISECONDS),
+                    getSelf(),
+                    new TimeoutJoin(request), // the message to send
+                    getContext().system().dispatcher(), getSelf()
+            );
+        }
+
         private void setTimeoutDequeue(int time) {
             getContext().system().scheduler().scheduleOnce(
                     Duration.create(time, TimeUnit.MILLISECONDS),
@@ -668,7 +699,7 @@ public class Ring {
             setTimeoutDequeue(TIMEOUT_DEQUEUE);
         }
 
-        public void onTimeout(Timeout msg) {
+        public void onTimeout(TimeoutRequest msg) {
             //System.out.println("TIMEOUT SCATTATO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
             Request request = null;
 
@@ -724,6 +755,13 @@ public class Ring {
                 }
             }
         }
+        public void onTimeout(TimeoutJoin msg) {
+            if (currJoiningNodeRequest.getJoiningPeer() == msg.request.getJoiningPeer()) {
+                if (msg.request.getnResponses() == 0 || msg.request.getnResponses() < msg.request.getStorageSize()) {
+                    currJoiningNodeRequest = null;
+                }
+            }
+        }
 
         public void onJoinRequestMsg(JoinRequestMsg msg) {
 
@@ -745,8 +783,11 @@ public class Ring {
                 VariabileProva = 0;
                 //System.out.println("SONO QUA X2");
                 // Create an external request with type::Join
-                ExternalRequest request = new ExternalRequest(msg.joiningPeer, ExternalRequestType.Join, msg.bootStrappingPeer);
+                ExternalRequest request = new ExternalRequest(msg.joiningPeer, ExternalRequestType.Join, msg.bootStrappingPeer, getSender());
+                currJoiningNodeRequest = request;
                 System.out.println("BN; Join requested to node " + this.id);
+                setTimeoutJoin(TIMEOUT_JOIN, request);
+
                 // Send peer list to the joining node
                 msg.joiningPeer.getActor().tell(new SendPeerListMsg(Collections.unmodifiableList(new ArrayList<>(this.peers))), getSelf());
             }
@@ -790,6 +831,7 @@ public class Ring {
 
             // Set the storage of the joining node
             this.storage = msg.items;
+            currJoiningNodeRequest.setStorageSize(storage.size());
             System.out.println("JN; Inserted items in storage, requesting read on each item");
             System.out.println("STAMPO LO STORAGE DEL NUOVO NODO");
 
@@ -877,19 +919,12 @@ public class Ring {
             }
 
             // First index of first node for each common item
-            int my_index = 0;
-            for (int j = 0; j < peers.size(); j++) {
-                if (this.id == peers.get(j).getID()) {
-                    my_index = j;
-                    break;
-                }
-            }
 
             for (Item i : commonItems) {
                 int indexOfFirstNode = getIndexOfFirstNode(i.getKey());
 
                 // Check if you are among the N nodes that can hold the item
-                if (!((my_index >= indexOfFirstNode && my_index < indexOfFirstNode + N) || (my_index <= indexOfFirstNode && my_index < ((indexOfFirstNode + N) % peers.size()) && ((indexOfFirstNode + N) % peers.size()) < indexOfFirstNode))) {
+                if (isNodeResponsibleForItem(indexOfFirstNode)) {
                     Hashtable<Integer, Item> newStorage = new Hashtable<>();
                     Enumeration<Integer> e = storage.keys();
 
@@ -998,16 +1033,7 @@ public class Ring {
             this.peers = msg.group;
 
             // Forgets the items it is no longer responsible for
-
             // First index of first node for each item of the node
-            int my_index = 0;
-            for (int j = 0; j < peers.size(); j++) {
-                if (this.id == peers.get(j).getID()) {
-                    my_index = j;
-                    break;
-                }
-            }
-
 
             Enumeration<Integer> en = storage.keys();
             while (en.hasMoreElements()) {
@@ -1016,7 +1042,7 @@ public class Ring {
                 int indexOfFirstNode = getIndexOfFirstNode(key);
 
                 // Check if you are among the N nodes that can hold the item
-                if (!((my_index >= indexOfFirstNode && my_index < indexOfFirstNode + N) || (my_index <= indexOfFirstNode && my_index < ((indexOfFirstNode + N) % peers.size()) && ((indexOfFirstNode + N) % peers.size()) < indexOfFirstNode))) {
+                if (isNodeResponsibleForItem(indexOfFirstNode)) {
                     Hashtable<Integer, Item> newStorage = new Hashtable<>();
                     Enumeration<Integer> e = storage.keys();
 
@@ -1033,7 +1059,7 @@ public class Ring {
             }
 
             
-
+            int my_index = getMyIndex();
             int antiClockwiseNeighbor = my_index - 1;
             if(antiClockwiseNeighbor == -1) {
                 antiClockwiseNeighbor = peers.size() - 1;
@@ -1068,8 +1094,7 @@ public class Ring {
                 int key = e.nextElement();
 
                 int indexOfFirstNode = getIndexOfFirstNode(key);
-
-                if ((my_index >= indexOfFirstNode && my_index < indexOfFirstNode + N) || (my_index <= indexOfFirstNode && my_index < ((indexOfFirstNode + N) % peers.size()) && ((indexOfFirstNode + N) % peers.size()) < indexOfFirstNode)) {
+                if (isNodeResponsibleForItem(indexOfFirstNode)) {
                     
                     this.storage.put(key, msg.items.get(key));
                     System.out.println("Ho inserito la chiave " + key + " nello storage");
@@ -1098,7 +1123,8 @@ public class Ring {
                     .match(RequestValueMsg.class, this::onRequestValueMsg)
                     .match(ValueResponseMsg.class, this::onValueResponseMsg)
                     .match(ChangeValueMsg.class, this::onChangeValueMsg)
-                    .match(Timeout.class, this::onTimeout)
+                    .match(TimeoutRequest.class, this::onTimeout)
+                    .match(TimeoutJoin.class, this::onTimeout)
                     .match(TimeoutDequeue.class, this::onTimeoutDequeue)
                     .match(UnlockMsg.class, this::onUnlockMsg)
                     .match(OkMsg.class, this::onOkMsg)

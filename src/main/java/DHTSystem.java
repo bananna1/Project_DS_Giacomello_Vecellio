@@ -94,7 +94,7 @@ public class DHTSystem {
         group.get(1).getActor().tell(new Ring.RecoveryRequestMsg(group.get(0).getActor()), client3);
         group.get(5).getActor().tell(new Ring.RecoveryRequestMsg(group.get(0).getActor()), client3);
          */
-        group.get(1).getActor().tell(new Ring.UpdateValueMsg(27, "ciao"), client1);
+        //group.get(1).getActor().tell(new Ring.UpdateValueMsg(27, "ciao"), client1);
         try {
             System.out.println(">>> Press ENTER to exit <<<");
             System.in.read();
