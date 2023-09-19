@@ -68,10 +68,17 @@ public class Ring {
 
     public static class AccessResponseMsg implements Serializable {
         public final boolean accessGranted;
+        public final boolean itemNotFound;
         public final Request request;
-        public AccessResponseMsg(boolean accessGranted, Request request) {
+        public AccessResponseMsg(boolean accessGranted, boolean itemNotFound, Request request) {
             this.accessGranted = accessGranted;
             this.request = request;
+            if (itemNotFound && request.getType() == Node.RequestType.Read && accessGranted == false) {
+                this.itemNotFound = true;
+            }
+            else {
+                this.itemNotFound = false;
+            }
         }
     }
 
@@ -380,7 +387,8 @@ public class Ring {
 
         private void setInitialStorage(List<Integer> keys, List<String> values){
             for(int i = 0; i < keys.size(); i++) {
-                if (isNodeResponsibleForItem(keys.get(i))) {
+                int indexOfFirstNode = getIndexOfFirstNode(keys.get(i));
+                if (isNodeResponsibleForItem(indexOfFirstNode)) {
                     this.storage.put(keys.get(i), new Item(keys.get(i), values.get(i), 1));
                 }
 
@@ -478,13 +486,12 @@ public class Ring {
             if (msg.request.getType() == RequestType.Read) { //READ
                 //SE NON CI SONO UPDATE, ACCCESS GRANTED
                 if (i == null) {
-                    msg.request.getClient().tell(new ErrorMsg("Error message for Read Request - request id: " + msg.request.getID() + ", key: " + msg.request.getKey() + ". Item not found"), getSelf());
                     accessGranted = false;
-                    // TODO TROVARE UN MODO PER RIMUOVERE DEFINITIVAMENTE LA RICHIESTA
+                    coordinator.tell(new AccessResponseMsg(accessGranted, true,  msg.request), getSelf());
+                    return;
                 }
                 else {
                     accessGranted = i.lockRead();
-                    //System.out.println("Access granted for read operation - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
                 }
 
             }
@@ -499,11 +506,11 @@ public class Ring {
             }
 
             if (accessGranted) {
-                coordinator.tell(new AccessResponseMsg(true, msg.request), getSelf());
+                coordinator.tell(new AccessResponseMsg(true, false, msg.request), getSelf());
             }
             else {
                 System.out.println("Access denied - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
-                coordinator.tell(new AccessResponseMsg(false, msg.request), getSelf());
+                coordinator.tell(new AccessResponseMsg(false, false,  msg.request), getSelf());
             }
         }
 
@@ -524,6 +531,11 @@ public class Ring {
 
             // RICHIESTA MESSA IN CODA
             else {
+                if (msg.itemNotFound && msg.request.getType() == RequestType.Read) { // il controllo sul tipo della richiesta è ridondante
+                    activeRequests.remove(msg.request);
+                    msg.request.getClient().tell(new ErrorMsg("Error message for Read Request - request id: " + msg.request.getID() + ", key: " + msg.request.getKey() + ". Item not found"), getSelf());
+                    return;
+                }
                 activeRequests.remove(msg.request);
                 requestQueue.add(msg.request);
                 System.out.println("Request added to the queue - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
@@ -708,6 +720,7 @@ public class Ring {
                 int i = r.getID();
                 if (i == msg.id_request) {
                     request = r;
+                    System.out.println("Ho trovato la richiesta per la chiave " + request.getKey());
                     break;
                 }
             }
@@ -756,10 +769,10 @@ public class Ring {
             }
         }
         public void onTimeout(TimeoutJoin msg) {
-            if (currJoiningNodeRequest.getJoiningPeer() == msg.request.getJoiningPeer()) {
-                if (msg.request.getnResponses() == 0 || msg.request.getnResponses() < msg.request.getStorageSize()) {
-                    currJoiningNodeRequest = null;
-                }
+            if (currJoiningNodeRequest.getJoiningPeer() == msg.request.getJoiningPeer() && currJoiningNodeRequest.getID() == msg.request.getID()) { // TODO VEDI TUTTI I CASI
+                System.out.println("");
+                currJoiningNodeRequest = null;
+                msg.request.getClient().tell(new ErrorMsg("Your Join request " + msg.request.getID() +  " took too much to be satisfied"), getSelf());
             }
         }
 
