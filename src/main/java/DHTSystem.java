@@ -94,38 +94,37 @@ public class DHTSystem {
          */
         //group.get(1).getActor().tell(new Ring.UpdateValueMsg(27, "ciao"), client1);
         
-        System.out.println(">>> Press ENTER send the command <<<");
+        System.out.println(">>> Press ENTER to send the command <<<");
         System.out.println(">>> Press 1 to read <<<");
         System.out.println(">>> Press 2 to update <<<");
         System.out.println(">>> Press 3 to join <<<");
         System.out.println(">>> Press 4 to leave <<<");
         System.out.println(">>> Press 5 to crash <<<");
         System.out.println(">>> Press 6 to recover <<<");
-        System.out.println(">>> Press 7 to exit <<<");
+        System.out.println(">>> Press ctrl+C to exit <<<");
         
         
-        //BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
-
         // Reading data using readLine
         while(true){
             Scanner in = new Scanner(System.in);
             int action = in.nextInt();
-            System.out.println(action);
-            int key;
-            String value;
+            int coordinator;
             
             switch (action) {
                 case 1:
-                    group.get(2).getActor().tell(new Ring.GetValueMsg(requestKey()), client1);
+                    coordinator = requestCoordinator(group);
+                    group.get(coordinator).getActor().tell(new Ring.GetValueMsg(requestKey()), client1);
                     break;
-                case 2:                                
-                    group.get(0).getActor().tell(new Ring.UpdateValueMsg(requestKey(), requestValue()), client3);
+                case 2:    
+                    coordinator = requestCoordinator(group);                            
+                    group.get(coordinator).getActor().tell(new Ring.UpdateValueMsg(requestKey(), requestValue()), client3);
                     break;
                 case 3:
                     System.out.println("Insert the ID of the joining node");
                     int id = in.nextInt();
                     Peer p = new Peer(id, system.actorOf(Ring.Node.props(id), "peer" + id));
-                    group.get(2).getActor().tell(new Ring.JoinRequestMsg(p, group.get(2).getActor()), client3);
+                    coordinator = requestCoordinator(group); 
+                    group.get(coordinator).getActor().tell(new Ring.JoinRequestMsg(p, group.get(2).getActor()), client3);
                     break;
                 case 4:
                     group.get(requestID()).getActor().tell(new Ring.LeaveRequestMsg(), client1);
@@ -133,11 +132,9 @@ public class DHTSystem {
                 case 5:
                     group.get(requestID()).getActor().tell(new Ring.CrashRequestMsg(), client3);
                     break;
-                case 6: 
-                    group.get(1).getActor().tell(new Ring.RecoveryRequestMsg(group.get(requestID()).getActor()), client3);
-                    break;
-                case 7:
-                    system.terminate();
+                case 6:
+                    coordinator = requestCoordinator(group);  
+                    group.get(coordinator).getActor().tell(new Ring.RecoveryRequestMsg(group.get(requestID()).getActor()), client3);
                     break;
                 default:
                     System.out.println("Insert a value from 1 to 7");
@@ -178,4 +175,34 @@ public class DHTSystem {
 
         return id;
     }
+
+    private static int requestCoordinator(List<Peer> group){
+        Scanner in = new Scanner(System.in);
+        
+        System.out.println("Enter the ID of the node to forward the request to");
+        int id = in.nextInt();
+
+        int index = getMyIndex(id, group);
+
+        while (getMyIndex(id, group) == -1){
+            System.out.println("Enter the ID of the node to forward the request to");
+            id = in.nextInt();
+            index = getMyIndex(id, group);
+        }
+
+        return index;
+    }
+
+    private static int getMyIndex(int id, List<Peer> group) {
+        int my_index = -1;
+
+        for (int j = 0; j < group.size(); j++) {
+            if (id == group.get(j).getID()) {
+                my_index = j;
+                break;
+            }
+        }
+        return my_index;
+    }
+    
 }
