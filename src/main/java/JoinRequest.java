@@ -4,8 +4,8 @@ public class JoinRequest extends ExternalRequest {
     private boolean joinConcluded = false;
     private boolean timeoutJoin = false;
 
-    public JoinRequest(ActorRef bootStrappingPeer, ActorRef client) {
-        super(Ring.Node.ExternalRequestType.Join, bootStrappingPeer, client);
+    public JoinRequest(ActorRef client) {
+        super(Ring.Node.ExternalRequestType.Join, client);
     }
     public void concludeJoin() {
         joinConcluded = true;

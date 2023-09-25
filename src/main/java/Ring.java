@@ -142,10 +142,10 @@ public class Ring {
         public TimeoutDequeue() {
         }
     }
-    public static class TimeoutJoin implements Serializable {
-        public final int joinId;
-        public TimeoutJoin(int joinId) {
-            this.joinId = joinId;
+    public static class TimeoutExternalRequest implements Serializable {
+        public final int externalRequestId;
+        public TimeoutExternalRequest(int externalRequestId) {
+            this.externalRequestId = externalRequestId;
         }
     }
 
@@ -263,12 +263,12 @@ public class Ring {
         public final int TIMEOUT_REQUEST = 5000;
         public final int TIMEOUT_DEQUEUE = 2000;
         public final int TIMEOUT_JOIN = 5000;
+        public final int TIMEOUT_RECOVERY = 5000;
+
         public final int read_quorum = N / 2 + 1;
         public final int write_quorum = N / 2 + 1;
 
         private boolean hasCrashed = false;
-        private boolean timeoutJoin = false;
-        private boolean joinConcluded = false;
         private ExternalRequest currExternalRequest = null;
 
         public enum RequestType {
@@ -677,11 +677,11 @@ public class Ring {
                     getContext().system().dispatcher(), getSelf()
             );
         }
-        private void setTimeoutJoin(int time, int joinId) {
+        private void setTimeoutExternalRequest(int time, int externalRequestId) {
             getContext().system().scheduler().scheduleOnce(
                     Duration.create(time, TimeUnit.MILLISECONDS),
                     getSelf(),
-                    new TimeoutJoin(joinId), // the message to send
+                    new TimeoutExternalRequest(externalRequestId), // the message to send
                     getContext().system().dispatcher(), getSelf()
             );
         }
@@ -766,7 +766,7 @@ public class Ring {
                 }
             }
         }
-        public void onTimeout(TimeoutJoin msg) {
+        public void onTimeout(TimeoutExternalRequest msg) {
             /*
             if (currJoiningNodeRequest != null && currJoiningNodeRequest.getJoiningPeer() == msg.request.getJoiningPeer() && currJoiningNodeRequest.getID() == msg.request.getID()) { // TODO VEDI TUTTI I CASI
                 System.out.println("");
@@ -774,10 +774,15 @@ public class Ring {
                 msg.request.getClient().tell(new ErrorMsg("Your Join request " + msg.request.getID() +  " took too much to be satisfied"), getSelf());
             }
              */
-            if (currExternalRequest != null && currExternalRequest.getType() == ExternalRequestType.Join && currExternalRequest.getID() == msg.joinId) {
+            if (currExternalRequest != null && currExternalRequest.getType() == ExternalRequestType.Join && currExternalRequest.getID() == msg.externalRequestId) {
                 ActorRef client = currExternalRequest.getClient();
                 currExternalRequest = null;
                 client.tell(new ErrorMsg("Error message for your Join Request - Joining node ID" + this.getID() + "Your join request took too much to be satisfied"), getSelf());
+            }
+            else if (currExternalRequest != null && currExternalRequest.getType() == ExternalRequestType.Recovery && currExternalRequest.getID() == msg.externalRequestId) {
+                ActorRef client = currExternalRequest.getClient();
+                currExternalRequest = null;
+                client.tell(new ErrorMsg("Error message for your Recovery Request - Joining node ID" + this.getID() + "Your join request took too much to be satisfied"), getSelf());
             }
         }
 
@@ -800,7 +805,7 @@ public class Ring {
             if(!alreadyTaken){
                 //System.out.println("SONO QUA X2");
                 // Create an external request with type::Join
-                ExternalRequest request = new JoinRequest(msg.bootStrappingPeer, getSender());
+                ExternalRequest request = new JoinRequest(getSender());
                 System.out.println("BN; Join requested to node " + this.id);
 
                 // Send peer list to the joining node
@@ -827,7 +832,7 @@ public class Ring {
             // Send message to the clockwise node in order to retrieve the list of items
             Peer neighbor = peers.get(indexClockwiseNode);
             System.out.println("JN; Got SendPeerList message. Found clockwise neighbor: " + neighbor.getID());
-            setTimeoutJoin(TIMEOUT_JOIN, currExternalRequest.getID());
+            setTimeoutExternalRequest(TIMEOUT_JOIN, currExternalRequest.getID());
             neighbor.getActor().tell(new GetNeighborItemsMsg(), getSelf());
 
         }
@@ -844,7 +849,6 @@ public class Ring {
         public void onSendItemsListMsg(SendItemsListMsg msg) {
 
             if(this.hasCrashed){ return; } // TODO VEDERE SE TOGLIERLO PERCHE' QUESTO METODO VIENE ESEGUITO SOLO DA UN JOINING NODE E QUINDI QUA IL NODO NON PUO' ESSERE CRASHATO
-            if (this.timeoutJoin) {return;}
             // Set the storage of the joining node
             this.storage = msg.items;
             System.out.println("JN; Inserted items in storage, requesting read on each item");
@@ -891,9 +895,6 @@ public class Ring {
 
             if(currExternalRequest.getnResponses() == storage.size()) {
                 if(msg.requestType == RequestType.ReadJoin){
-                    if (timeoutJoin) {
-                        return;
-                    }
                     List<Item> items = new ArrayList<>();
 
                     // Creating  Enumeration interface and get keys() from Hashtable
@@ -1041,19 +1042,18 @@ public class Ring {
                 return;
             }
             hasCrashed = false;
-
+            ExternalRequest request = new RecoveryRequest(getSender());
+            this.currExternalRequest = request;
+            setTimeoutExternalRequest(TIMEOUT_RECOVERY, request.getID());
             msg.nodeToContact.tell(new GetPeerListMsg(), getSelf());
 
         }
 
         public void onGetPeerListMsg(GetPeerListMsg msg) {
-
             getSender().tell(new SendPeerListRecoveryMsg(Collections.unmodifiableList(new ArrayList<>(this.peers))), getSelf());
-
         }
 
         public void onSendPeerListRecoveryMsg(SendPeerListRecoveryMsg msg) {
-
             this.peers = msg.group;
 
             // Forgets the items it is no longer responsible for
@@ -1104,14 +1104,6 @@ public class Ring {
 
         public void onSendItemsListRecoveryMsg(SendItemsListRecoveryMsg msg){
 
-            int my_index = 0;
-            for (int j = 0; j < peers.size(); j++) {
-                if (this.id == peers.get(j).getID()) {
-                    my_index = j;
-                    break;
-                }
-            }
-
             Enumeration<Integer> e = msg.items.keys();
 
             while (e.hasMoreElements()) {
@@ -1148,7 +1140,7 @@ public class Ring {
                     .match(ValueResponseMsg.class, this::onValueResponseMsg)
                     .match(ChangeValueMsg.class, this::onChangeValueMsg)
                     .match(TimeoutRequest.class, this::onTimeout)
-                    .match(TimeoutJoin.class, this::onTimeout)
+                    .match(TimeoutExternalRequest.class, this::onTimeout)
                     .match(TimeoutDequeue.class, this::onTimeoutDequeue)
                     .match(UnlockMsg.class, this::onUnlockMsg)
                     .match(OkMsg.class, this::onOkMsg)
