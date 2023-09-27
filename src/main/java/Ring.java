@@ -911,7 +911,6 @@ public class Ring {
                         items.add(i);
 
                     }
-
                     currExternalRequest = null;
 
                     // Send announceJoiningNodeMsg
@@ -919,6 +918,7 @@ public class Ring {
                         peer.getActor().tell(new AnnounceJoiningNodeMsg(this.getID(), items), getSelf());
                     }
                 }
+                // TODO FARE PARTE ELSE CON IL READRECOVERY (che al momento non ricordo perché fossero trattati come casi separati)
             }
 
             printNode();
