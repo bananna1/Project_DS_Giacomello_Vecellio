@@ -274,7 +274,8 @@ public class Ring {
         public enum RequestType {
             Read,
             Update,
-            ReadJoin
+            ReadJoin,
+            ReadRecovery
         }
 
         public enum ExternalRequestType {
@@ -879,7 +880,7 @@ public class Ring {
         }
         public void onReturnValueMsg(ReturnValueMsg msg) {
 
-            if(this.hasCrashed){ return; }
+            if(this.hasCrashed){ return; } // NON HA SENSO PERCHE' QUESTO METODO VIENE ESEGUITO SOLO IN CASO DI RECOVERY E JOIN
 
             currExternalRequest.incrementnResponses();
             System.out.println("Received return message for key " + msg.item.getKey() + ", value: " + msg.item.getValue() + ", version: " + msg.item.getVersion());
@@ -918,7 +919,9 @@ public class Ring {
                         peer.getActor().tell(new AnnounceJoiningNodeMsg(this.getID(), items), getSelf());
                     }
                 }
-                // TODO FARE PARTE ELSE CON IL READRECOVERY (che al momento non ricordo perché fossero trattati come casi separati)
+                else if (msg.requestType == RequestType.ReadRecovery) {
+                    currExternalRequest = null;
+                }
             }
 
             printNode();
@@ -1103,7 +1106,10 @@ public class Ring {
         }
 
         public void onSendItemsListRecoveryMsg(SendItemsListRecoveryMsg msg){
-
+            if (storage.size() == 0 && msg.items.size() == 0) {
+                // RECOVERY TERMINATO PERCHE' NON SERVE FARE IL READ DEGLI ITEM VISTO CHE LO STORAGE E' VUOTO
+                currExternalRequest = null;
+            }
             Enumeration<Integer> e = msg.items.keys();
 
             while (e.hasMoreElements()) {
