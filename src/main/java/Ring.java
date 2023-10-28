@@ -506,10 +506,17 @@ public class Ring {
             else { //UPDATE
                 // SE NON CI SONO READ DELL'ITEM O UPDATE DELL'ITEM, ACCESS GRANTED
                 if (i == null) {
+                    System.out.println("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
                     i = new Item(msg.request.getKey(), "", 0); // version 0 is useful to identify that the item is new
+                    storage.put(msg.request.getKey(), i);
                 }
                 accessGranted = i.lockUpdate();
-                System.out.println("Access granted for update operation - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
+                if (accessGranted) {
+                    System.out.println("Access GRANTED for update operation - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
+                }
+                else{
+                    System.out.println("Access DENIED for update operation - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
+                }
 
             }
 
@@ -604,7 +611,7 @@ public class Ring {
                         //System.out.println("HO RAGGIUNTO IL WRITE QUORUM");
                         msg.request.getClient().tell(new ReturnValueMsg(currBest, msg.request.getID(), msg.request.getType()), getSelf());
                         int index = getIndexOfFirstNode(msg.request.getKey());
-                        int newVersion = currBest.getVersion();
+                        int newVersion = currBest.getVersion() + 1;
                         /*
                         if (currBest.getVersion() == 0) {
                             newVersion = 1;
@@ -639,7 +646,7 @@ public class Ring {
             Item newItem = new Item(msg.request.getKey(), msg.request.getNewValue(), msg.newVersion);
             this.storage.put(msg.request.getKey(), newItem);
             //System.out.println("New item - key: " + msg.request.getKey() + ", new value: " + storage.get(msg.request.getKey()).getValue() + ", current version: " + storage.get(msg.request.getKey()).getVersion());
-            System.out.print("On change value msg");
+            //System.out.print("On change value msg");
             printNode();
             getSender().tell(new OkMsg(msg.request), getSelf());
         }
