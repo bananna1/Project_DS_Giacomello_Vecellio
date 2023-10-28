@@ -790,7 +790,6 @@ public class Ring {
 
             if(this.hasCrashed){ return; }
 
-            //System.out.println("SONO QUA");
             // Error message if the key already exists
             boolean alreadyTaken = false;
             for(Peer peer : peers){

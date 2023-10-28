@@ -109,6 +109,7 @@ public class DHTSystem {
                     group.get(requestID()).getActor().tell(new Ring.LeaveRequestMsg(), client1);
                     break;
                 case 5:
+                //CAMBIARE L'ID: PRENDE IL NUMERO DA 0 A 6 INVECE CHE 10-60
                     group.get(requestID()).getActor().tell(new Ring.CrashRequestMsg(), client3);
                     break;
                 case 6:
