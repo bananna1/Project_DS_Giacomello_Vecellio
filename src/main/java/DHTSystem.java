@@ -31,6 +31,7 @@ public class DHTSystem {
         List<Integer> keys = new ArrayList<>();
         List<String> values = new ArrayList<>();
 
+
         /*
         for (int i=1; i<=N_ITEM; i++) {
 
@@ -88,6 +89,7 @@ public class DHTSystem {
             Scanner in = new Scanner(System.in);
             int action = in.nextInt();
             int coordinator;
+            int n = N_PARTICIPANTS;
             
             switch (action) {
                 case 1:
@@ -103,14 +105,16 @@ public class DHTSystem {
                     int id = in.nextInt();
                     Peer p = new Peer(id, system.actorOf(Ring.Node.props(id), "peer" + id));
                     coordinator = requestCoordinator(group); 
-                    group.get(coordinator).getActor().tell(new Ring.JoinRequestMsg(p, group.get(2).getActor()), client3);
+                    group.get(coordinator).getActor().tell(new Ring.JoinRequestMsg(p, group.get(coordinator).getActor()), client3);
+
+                    addPeer(p, group);
                     break;
                 case 4:
                     group.get(requestID()).getActor().tell(new Ring.LeaveRequestMsg(), client1);
                     break;
                 case 5:
-                //CAMBIARE L'ID: PRENDE IL NUMERO DA 0 A 6 INVECE CHE 10-60
-                    group.get(requestID()).getActor().tell(new Ring.CrashRequestMsg(), client3);
+                    int nodeToCrash = requestCoordinator(group);
+                    group.get(nodeToCrash).getActor().tell(new Ring.CrashRequestMsg(), client3);
                     break;
                 case 6:
                     coordinator = requestCoordinator(group);  
@@ -163,11 +167,11 @@ public class DHTSystem {
 
         int index = getMyIndex(id, group);
 
-        while (getMyIndex(id, group) == -1){
+        /*while (getMyIndex(id, group) == -1){
             System.out.println("Enter the ID of the node to forward the request to");
             id = in.nextInt();
             index = getMyIndex(id, group);
-        }
+        }*/
 
         return index;
     }
@@ -182,6 +186,17 @@ public class DHTSystem {
             }
         }
         return my_index;
+    }
+
+    private static void addPeer(Peer newPeer, List<Peer> group) {
+        int newPeerPosition = 0;
+        for (int i = 0; i < group.size(); i++) {
+            if (newPeer.getID() < group.get(i).getID()) {
+                newPeerPosition = i;
+                break;
+            }
+        }
+        group.add(newPeerPosition, newPeer);
     }
     
 }

@@ -3,7 +3,6 @@ public class Item {
     private String value;
     private int version;
 
-
     private boolean lockedUpdate = false;
     private int nLockedRead = 0;
 
