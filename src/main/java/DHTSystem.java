@@ -5,7 +5,8 @@ import akka.actor.ActorRef;
 import akka.actor.ActorSystem;
 import java.util.Random;
 import java.util.Scanner;
-
+import akka.actor.*;
+//import java.Test;
 
 public class DHTSystem {
     final static int N_PARTICIPANTS = 6;
@@ -30,10 +31,6 @@ public class DHTSystem {
         List<Integer> keys = new ArrayList<>();
         List<String> values = new ArrayList<>();
 
-        // Create the initial key-value storage
-        int key_prova_1 = 0;
-        int key_prova_2 = 0;
-
         /*
         for (int i=1; i<=N_ITEM; i++) {
 
@@ -47,8 +44,8 @@ public class DHTSystem {
             }
             char value = randomChar();
             values.add(value + "");
-        }
-         */
+        }*/
+
         keys.add(16);
         keys.add(49);
         keys.add(48);
@@ -67,33 +64,14 @@ public class DHTSystem {
             peer.getActor().tell(start, null);
         }
 
+        createInterface(system, group);
+    }
+
+    private static void createInterface(ActorSystem system, ArrayList<Peer> group) {
         ActorRef client1 = system.actorOf(Client.props(1));
         ActorRef client2 = system.actorOf(Client.props(2));
         ActorRef client3 = system.actorOf(Client.props(3));
 
-        //System.out.println("Client 3 richiede chiave " + key_prova_1);
-        //System.out.println("Client 2 richiede chiave " + key_prova_1);
-        //System.out.println("Client 3 richiede chiave " + key_prova_2);
-        //System.out.println("Client 3 richiede update chiave " + key_prova_1 + " con il valore CACCA");
-        //System.out.println("Client 3 richiede chiave " + key_prova_1);
-
-        //group.get(2).getActor().tell(new Ring.GetValueMsg(key_prova_1), client1);
-        //group.get(1).getActor().tell(new Ring.GetValueMsg(key_prova_1), client3);
-        //group.get(0).getActor().tell(new Ring.UpdateValueMsg(key_prova_1, "CACCA 1"), client3);
-        //group.get(2).getActor().tell(new Ring.UpdateValueMsg(key_prova_2, "CACCA 2"), client1);
-        //group.get(4).getActor().tell(new Ring.GetValueMsg(key_prova_1), client3);
-
-        //Peer p = new Peer(15, system.actorOf(Ring.Node.props(15), "peer" + 15));
-        //group.get(2).getActor().tell(new Ring.JoinRequestMsg(p, group.get(2).getActor()), client3);
-        //group.get(2).getActor().tell(new Ring.LeaveRequestMsg(), client1);
-        /*
-        group.get(5).getActor().tell(new Ring.CrashRequestMsg(), client3);
-        Thread.sleep(2000);
-        group.get(1).getActor().tell(new Ring.RecoveryRequestMsg(group.get(0).getActor()), client3);
-        group.get(5).getActor().tell(new Ring.RecoveryRequestMsg(group.get(0).getActor()), client3);
-         */
-        //group.get(1).getActor().tell(new Ring.UpdateValueMsg(27, "ciao"), client1);
-        
         System.out.println(">>> Press ENTER to send the command <<<");
         System.out.println(">>> Press 1 to read <<<");
         System.out.println(">>> Press 2 to update <<<");
@@ -101,6 +79,7 @@ public class DHTSystem {
         System.out.println(">>> Press 4 to leave <<<");
         System.out.println(">>> Press 5 to crash <<<");
         System.out.println(">>> Press 6 to recover <<<");
+        System.out.println(">>> Press 7 to test <<<");
         System.out.println(">>> Press ctrl+C to exit <<<");
         
         
@@ -136,16 +115,15 @@ public class DHTSystem {
                     coordinator = requestCoordinator(group);  
                     group.get(coordinator).getActor().tell(new Ring.RecoveryRequestMsg(group.get(requestID()).getActor()), client3);
                     break;
+                case 7:
+                    Test test = new Test(system, group);
+                    test.testSequentialConsistency();
+                    break;
                 default:
                     System.out.println("Insert a value from 1 to 7");
                     break;
-           
-
             }
-
         }
-            
-
     }
 
     private static int requestKey() {
