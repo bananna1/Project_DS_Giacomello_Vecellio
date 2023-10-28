@@ -12,6 +12,7 @@ import java.util.LinkedList;
 import java.util.Queue;
 import java.util.concurrent.TimeUnit;
 
+//import Ring.Node.RequestType;
 
 import java.util.Enumeration;
 
@@ -40,14 +41,15 @@ public class Ring {
 
     public static class GetValueMsg implements Serializable {
         public final int key;
-        public final boolean isJoin;
-        public GetValueMsg(int key, boolean isJoin) {
+        //public final boolean isJoin;
+        public final Ring.Node.RequestType type;
+        public GetValueMsg(int key, Ring.Node.RequestType type) {
             this.key = key;
-            this.isJoin = isJoin;
+            this.type = type;
         }
         public GetValueMsg(int key) {
             this.key = key;
-            this.isJoin = false;
+            this.type = Ring.Node.RequestType.Read;
         }
     }
 
@@ -263,7 +265,7 @@ public class Ring {
         public final int TIMEOUT_REQUEST = 5000;
         public final int TIMEOUT_DEQUEUE = 2000;
         public final int TIMEOUT_JOIN = 5000;
-        public final int TIMEOUT_RECOVERY = 5000;
+        public final int TIMEOUT_RECOVERY = 10000;
 
         public final int read_quorum = N / 2 + 1;
         public final int write_quorum = N / 2 + 1;
@@ -274,7 +276,8 @@ public class Ring {
         public enum RequestType {
             Read,
             Update,
-            ReadJoin
+            ReadJoin,
+            ReadRecovery
         }
 
         public enum ExternalRequestType {
@@ -304,7 +307,7 @@ public class Ring {
         }
 
         void setGroup(List<Peer> group) {
-            peers = new ArrayList<>();
+            this.peers = new ArrayList<>();
             for (Peer b: group) {
                 this.peers.add(b);
             }
@@ -452,11 +455,15 @@ public class Ring {
             int key = msg.key;
             Request newRequest;
 
-            if(msg.isJoin == true)
+            if(msg.type == RequestType.ReadJoin) {
                 newRequest = new Request(key, RequestType.ReadJoin, getSender(), null);
-            else
+            }
+            else if (msg.type == RequestType.ReadRecovery) {
+                newRequest = new Request(key, RequestType.ReadRecovery, getSender(), null);
+            }  
+            else {
                 newRequest = new Request(key, RequestType.Read, getSender(), null);
-
+            }
             activeRequests.add(newRequest);
             setTimeout(TIMEOUT_REQUEST, newRequest.getID());
             startRequest(newRequest);
@@ -484,7 +491,7 @@ public class Ring {
             Item i = storage.get(msg.request.getKey());
             ActorRef coordinator = getSender();
             boolean accessGranted;
-            if (msg.request.getType() == RequestType.Read) { //READ
+            if (msg.request.getType() == RequestType.Read || msg.request.getType() == RequestType.ReadJoin || msg.request.getType() == RequestType.ReadRecovery) { //READ
                 //SE NON CI SONO UPDATE, ACCCESS GRANTED
                 if (i == null) {
                     accessGranted = false;
@@ -499,10 +506,17 @@ public class Ring {
             else { //UPDATE
                 // SE NON CI SONO READ DELL'ITEM O UPDATE DELL'ITEM, ACCESS GRANTED
                 if (i == null) {
+                    System.out.println("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
                     i = new Item(msg.request.getKey(), "", 0); // version 0 is useful to identify that the item is new
+                    storage.put(msg.request.getKey(), i);
                 }
                 accessGranted = i.lockUpdate();
-                System.out.println("Access granted for update operation - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
+                if (accessGranted) {
+                    System.out.println("Access GRANTED for update operation - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
+                }
+                else{
+                    System.out.println("Access DENIED for update operation - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
+                }
 
             }
 
@@ -577,7 +591,7 @@ public class Ring {
                     }
                 }
 
-                if(msg.request.getType() == RequestType.Read){    //READ
+                if(msg.request.getType() == RequestType.Read || msg.request.getType() == RequestType.ReadJoin || msg.request.getType() == RequestType.ReadRecovery){    //READ
                     if (nResponses >= read_quorum) {
                         if (msg.request.getCurrBest() == null) {
                             msg.request.getClient().tell(new ErrorMsg("Error message for Read Request - request id: " + msg.request.getID() + ", key: " + msg.request.getKey() + ". Value does not exist in the ring"), getSelf());
@@ -597,7 +611,7 @@ public class Ring {
                         //System.out.println("HO RAGGIUNTO IL WRITE QUORUM");
                         msg.request.getClient().tell(new ReturnValueMsg(currBest, msg.request.getID(), msg.request.getType()), getSelf());
                         int index = getIndexOfFirstNode(msg.request.getKey());
-                        int newVersion = currBest.getVersion();
+                        int newVersion = currBest.getVersion() + 1;
                         /*
                         if (currBest.getVersion() == 0) {
                             newVersion = 1;
@@ -632,6 +646,7 @@ public class Ring {
             Item newItem = new Item(msg.request.getKey(), msg.request.getNewValue(), msg.newVersion);
             this.storage.put(msg.request.getKey(), newItem);
             //System.out.println("New item - key: " + msg.request.getKey() + ", new value: " + storage.get(msg.request.getKey()).getValue() + ", current version: " + storage.get(msg.request.getKey()).getVersion());
+            //System.out.print("On change value msg");
             printNode();
             getSender().tell(new OkMsg(msg.request), getSelf());
         }
@@ -826,7 +841,7 @@ public class Ring {
             // Find the clockwise neighbor node
             int indexClockwiseNode = getIndexOfFirstNode(this.id) + 1; // ALTRIMENTI TROVA SE STESSO; IN QUESTO MODO TROVA IL NODO IMMEDIATAMENTE SUCCESSIVO A SE STESSO
             if (indexClockwiseNode == peers.size()) {
-                indexClockwiseNode = 0; // se il nuovo nodo è l'ultimo allora il clockwise neighbor è il primo della lista
+                indexClockwiseNode = 0; // System.out.println("Ho finito di fare il read join");se il nuovo nodo è l'ultimo allora il clockwise neighbor è il primo della lista
             }
             // Send message to the clockwise node in order to retrieve the list of items
             Peer neighbor = peers.get(indexClockwiseNode);
@@ -867,10 +882,10 @@ public class Ring {
 
                 // Getting the key of a particular entry
                 int key = e.nextElement();
-                System.out.println(key);
+                System.out.println("Sto facendo il read per: " + key);
 
                 // Send a read request for every items
-                getSender().tell(new GetValueMsg(key, true), getSelf());
+                getSender().tell(new GetValueMsg(key, RequestType.ReadJoin), getSelf());
             }
 
 
@@ -878,22 +893,26 @@ public class Ring {
         }
         public void onReturnValueMsg(ReturnValueMsg msg) {
 
-            if(this.hasCrashed){ return; }
+            if(this.hasCrashed){ return; } // NON HA SENSO PERCHE' QUESTO METODO VIENE ESEGUITO SOLO IN CASO DI RECOVERY E JOIN
 
             currExternalRequest.incrementnResponses();
-            System.out.println("Received return message for key " + msg.item.getKey() + ", value: " + msg.item.getValue() + ", version: " + msg.item.getVersion());
+            //System.out.println("Received return message for key " + msg.item.getKey() + ", value: " + msg.item.getValue() + ", version: " + msg.item.getVersion());
             // Change version if it is not updated
             if(storage.containsKey(msg.item.getKey())){
-                if(msg.item.getVersion() > storage.get(msg.item.getKey()).getVersion()) {
+                if(msg.item.getVersion() >= storage.get(msg.item.getKey()).getVersion()) {
                     storage.put(msg.item.getKey(), msg.item);
-                    System.out.println("Changed item version");
+                    //System.out.println("Changed item version");
                 }
+                //System.out.println("IF; Item in storage: " + storage.get(msg.item.getKey()).getKey() + " " + storage.get(msg.item.getKey()).getValue() + " " + storage.get(msg.item.getKey()).getVersion());
             } else {
                 storage.put(msg.item.getKey(), msg.item);
+                //System.out.println("ELSE; Item in storage: " + storage.get(msg.item.getKey()).getKey() + " " + storage.get(msg.item.getKey()).getValue() + " " + storage.get(msg.item.getKey()).getVersion());
+                
             }
 
             if(currExternalRequest.getnResponses() == storage.size()) {
                 if(msg.requestType == RequestType.ReadJoin){
+                    //System.out.println("Ho finito di fare il read join");
                     List<Item> items = new ArrayList<>();
 
                     // Creating  Enumeration interface and get keys() from Hashtable
@@ -910,7 +929,6 @@ public class Ring {
                         items.add(i);
 
                     }
-
                     currExternalRequest = null;
 
                     // Send announceJoiningNodeMsg
@@ -918,9 +936,13 @@ public class Ring {
                         peer.getActor().tell(new AnnounceJoiningNodeMsg(this.getID(), items), getSelf());
                     }
                 }
+                else if (msg.requestType == RequestType.ReadRecovery) {
+                    System.out.println("Ho finito di fare il read recovery");
+                    currExternalRequest = null;
+                }
             }
-
-            printNode();
+            //System.out.print("On return value msg");
+            //printNode();
 
         }
 
@@ -933,40 +955,16 @@ public class Ring {
             if (this.id != msg.joiningNodeKey) {
                 addPeer(new Peer(msg.joiningNodeKey, getSender()));
             }
-            // Find common items
-            List<Item> commonItems = new ArrayList<>();
-
-            for(Item i : msg.items) {
-                if(this.storage.get(i.getKey()) != null) {
-                    commonItems.add(i);
+            Hashtable<Integer, Item> newStorage = new Hashtable<>();
+            Enumeration<Integer> e = storage.keys();
+            while (e.hasMoreElements()) {
+                int key = e.nextElement();
+                int index = getIndexOfFirstNode(key);
+                if (isNodeResponsibleForItem(index)) {
+                    newStorage.put(key, storage.get(key));
                 }
             }
-
-            // First index of first node for each common item
-
-            for (Item i : commonItems) {
-                int indexOfFirstNode = getIndexOfFirstNode(i.getKey());
-
-                // Check if you are among the N nodes that can hold the item
-                if (isNodeResponsibleForItem(indexOfFirstNode)) {
-                    Hashtable<Integer, Item> newStorage = new Hashtable<>();
-                    Enumeration<Integer> e = storage.keys();
-
-                    while (e.hasMoreElements()) {
-                        int key = e.nextElement();
-                        if (i.getKey() != key) {
-                            newStorage.put(key, storage.get(key));
-                        }
-                    }
-                    this.storage = newStorage;
-                    //Item removed_item = this.storage.remove(i.getKey());
-                    //System.out.println("NODE: " + this.id + ", KEY REMOVED: " + removed_item.getKey() + ", VALUE REMOVED: " + removed_item.getValue());
-                    //System.out.println("Node " + this.id + " removed item with key " + i.getKey());
-                }
-                else {
-                    //System.out.println("Node " + this.id + " keeps item with key " + i.getKey());
-                }
-            }
+            this.storage = newStorage;
             printNode();
 
         }
@@ -1059,6 +1057,7 @@ public class Ring {
             // First index of first node for each item of the node
 
             Enumeration<Integer> en = storage.keys();
+            Hashtable<Integer, Item> newStorage = new Hashtable<>();
             while (en.hasMoreElements()) {
                 int key = en.nextElement();
                 
@@ -1066,7 +1065,7 @@ public class Ring {
 
                 // Check if you are among the N nodes that can hold the item
                 if (isNodeResponsibleForItem(indexOfFirstNode)) {
-                    Hashtable<Integer, Item> newStorage = new Hashtable<>();
+                    
                     Enumeration<Integer> e = storage.keys();
 
                     while (e.hasMoreElements()) {
@@ -1076,19 +1075,18 @@ public class Ring {
                             System.out.println("HO TENUTO: " + key1);
                         }
                     }
-
-                    this.storage = newStorage;
                 }
             }
 
-            
+            this.storage = newStorage;
+
             int my_index = getMyIndex();
             int antiClockwiseNeighbor = my_index - 1;
             if(antiClockwiseNeighbor == -1) {
                 antiClockwiseNeighbor = peers.size() - 1;
             }
 
-            // Requests the items it became responsible for to the anti clockwise node. We only ask the ant-clockwise neighbor because the only items we could possibly be
+            // Requests the items it became responsible for to the anti-clockwise node. We only ask the anti-clockwise neighbor because the only items we could possibly be
             // missing in doing so are the ones for which the recovery node is the  first holder, i.e. the owner. Nevertheless, since during the alleged creation
             // of those items said node was down, the request wouldn't have been authorized.
             peers.get(antiClockwiseNeighbor).getActor().tell(new GetItemsListMsg(this.getID()), getSelf());
@@ -1102,6 +1100,16 @@ public class Ring {
         }
 
         public void onSendItemsListRecoveryMsg(SendItemsListRecoveryMsg msg){
+            if (storage.size() == 0 && msg.items.size() == 0) {
+                // RECOVERY TERMINATO PERCHE' NON SERVE FARE IL READ DEGLI ITEM VISTO CHE LO STORAGE E' VUOTO
+                currExternalRequest = null;
+            }
+
+            Enumeration<Integer> e1 = storage.keys();
+            while (e1.hasMoreElements()) {
+                int key = e1.nextElement();
+                System.out.println(storage.get(key).getValue());
+            }
 
             Enumeration<Integer> e = msg.items.keys();
 
@@ -1120,7 +1128,8 @@ public class Ring {
             
             while (en.hasMoreElements()) {
                 int key = en.nextElement();
-                getSender().tell(new GetValueMsg(key, false), getSelf());
+                
+                getSender().tell(new GetValueMsg(key, RequestType.ReadRecovery), getSelf());
             }
 
             //printNode();

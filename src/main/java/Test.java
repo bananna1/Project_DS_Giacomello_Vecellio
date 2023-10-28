@@ -89,7 +89,46 @@ public class Test {
 
         System.out.println("-----------------------------------------------------");
 
-        System.out.println("TEST 5: MULTIPLE READS AND WRITES");
+        System.out.println("TEST 5: READ AND WRITE REQUEST WITH DIFFERENT KEYS TO DIFFERENT COORDINATOR BY DIFFERENT CLIENTS");
+        group.get(2).getActor().tell(new Ring.GetValueMsg(key_prova_1), client1);
+        group.get(0).getActor().tell(new Ring.UpdateValueMsg(key_prova_2, "change1"), client1);
+        try {
+            TimeUnit.SECONDS.sleep(2);
+        } catch (InterruptedException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        System.out.println("TEST 5 COMPLETED");
+
+        System.out.println("-----------------------------------------------------");
+
+        System.out.println("TEST 6: READ AND WRITE REQUEST WITH THE SAME KEYS TO DIFFERENT COORDINATOR BY DIFFERENT CLIENTS");
+        group.get(2).getActor().tell(new Ring.GetValueMsg(key_prova_1), client1);
+        group.get(0).getActor().tell(new Ring.UpdateValueMsg(key_prova_1, "change61"), client1);
+        try {
+            TimeUnit.SECONDS.sleep(2);
+        } catch (InterruptedException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        System.out.println("TEST 6 COMPLETED");
+
+        System.out.println("-----------------------------------------------------");
+
+        System.out.println("TEST 7: TWO WRITES WITH A NEW SAME KEY TO DIFFERENT COORDINATOR BY DIFFERENT CLIENTS");
+        group.get(1).getActor().tell(new Ring.UpdateValueMsg(1, "A"), client2);
+        group.get(0).getActor().tell(new Ring.UpdateValueMsg(1, "B"), client1);
+        try {
+            TimeUnit.SECONDS.sleep(2);
+        } catch (InterruptedException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        System.out.println("TEST 7 COMPLETED");
+
+        System.out.println("-----------------------------------------------------");
+
+        System.out.println("TEST 8: MULTIPLE READS AND WRITES");
         group.get(2).getActor().tell(new Ring.GetValueMsg(key_prova_1), client1);
         group.get(0).getActor().tell(new Ring.UpdateValueMsg(key_prova_1, "change5"), client3);
         group.get(2).getActor().tell(new Ring.GetValueMsg(key_prova_1), client1);
@@ -101,7 +140,7 @@ public class Test {
             // TODO Auto-generated catch block
             e.printStackTrace();
         }
-        System.out.println("TEST 5 COMPLETED");
+        System.out.println("TEST 8 COMPLETED");
         
     }
 
