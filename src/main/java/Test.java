@@ -165,20 +165,89 @@ public class Test {
         System.out.println("TEST 10 COMPLETED");
         
     }
+
+    /**
+     * Void method to test join and leave
+     */
+    public void testJoinLeave(ActorSystem system){
+
+        System.out.println("TEST 1: NODE 30 LEAVE");
+        group.get(2).getActor().tell(new Ring.LeaveRequestMsg(), client1);
+        try {
+            TimeUnit.SECONDS.sleep(3);
+        } catch (InterruptedException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        System.out.println("TEST 1 COMPLETED");
+
+        System.out.println("-----------------------------------------------------");
+
+        group.remove(2);
+
+        System.out.println("TEST 2: NODE 25 JOIN");
+        Peer p = new Peer(25, system.actorOf(Ring.Node.props(25), "peer" + 25));
+        group.get(2).getActor().tell(new Ring.JoinRequestMsg(p, group.get(2).getActor()), client3);
+        try {
+            TimeUnit.SECONDS.sleep(3);
+        } catch (InterruptedException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        System.out.println("TEST 2 COMPLETED");
+
+        System.out.println("-----------------------------------------------------");
+
+    }
     
     /**
      * Void method to test crash and recovery operations
+     * @throws InterruptedException
      */
-    public void testCrashRecovery(){
-        //Peer p = new Peer(15, system.actorOf(Ring.Node.props(15), "peer" + 15));
-        //group.get(2).getActor().tell(new Ring.JoinRequestMsg(p, group.get(2).getActor()), client3);
-        //group.get(2).getActor().tell(new Ring.LeaveRequestMsg(), client1);
-        /*
-        group.get(5).getActor().tell(new Ring.CrashRequestMsg(), client3);
+    public void testCrashRecovery(ActorSystem system) throws InterruptedException{
+
+        System.out.println("TEST 1: NODE 30 CRASH, NODE 20 LEAVE, NODE 30 RECOVER");
+        group.get(2).getActor().tell(new Ring.CrashRequestMsg(), client1);
         Thread.sleep(2000);
-        group.get(1).getActor().tell(new Ring.RecoveryRequestMsg(group.get(0).getActor()), client3);
-        group.get(5).getActor().tell(new Ring.RecoveryRequestMsg(group.get(0).getActor()), client3);
-         */
-        //group.get(1).getActor().tell(new Ring.UpdateValueMsg(27, "ciao"), client1);
+        group.get(2).getActor().tell(new Ring.LeaveRequestMsg(), client1);
+        group.get(2).getActor().tell(new Ring.RecoveryRequestMsg(group.get(0).getActor()), client1);
+        try {
+            TimeUnit.SECONDS.sleep(3);
+        } catch (InterruptedException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        System.out.println("TEST 1 COMPLETED");
+
+        System.out.println("-----------------------------------------------------");
+
+        System.out.println("TEST 2: NODE 30 CRASH, NODE 25 JOIN, NODE 30 RECOVER");
+        group.get(2).getActor().tell(new Ring.CrashRequestMsg(), client3);
+        Thread.sleep(2000);
+        Peer p = new Peer(25, system.actorOf(Ring.Node.props(25), "peer" + 25));
+        group.get(2).getActor().tell(new Ring.JoinRequestMsg(p, group.get(2).getActor()), client3);
+        group.get(2).getActor().tell(new Ring.RecoveryRequestMsg(group.get(0).getActor()), client3);
+        try {
+            TimeUnit.SECONDS.sleep(3);
+        } catch (InterruptedException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        System.out.println("TEST 2 COMPLETED");
+
+        System.out.println("-----------------------------------------------------");
+        
+        System.out.println("TEST 3: NODE 30 CRASH, WRITE AN ITEM WITH ID 20, NODE 30 RECOVER");
+        group.get(2).getActor().tell(new Ring.CrashRequestMsg(), client3);
+        Thread.sleep(2000);
+        group.get(1).getActor().tell(new Ring.UpdateValueMsg(20, "TEST 3"), client2);
+        group.get(2).getActor().tell(new Ring.RecoveryRequestMsg(group.get(0).getActor()), client3);
+        try {
+            TimeUnit.SECONDS.sleep(3);
+        } catch (InterruptedException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        System.out.println("TEST 3 COMPLETED");
     }
 }

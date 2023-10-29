@@ -72,8 +72,9 @@ public class DHTSystem {
      * Method to create the graphic interface
      * @param system actor system
      * @param group  list of peer
+     * @throws InterruptedException
      */
-    private static void createInterface(ActorSystem system, ArrayList<Peer> group) {
+    private static void createInterface(ActorSystem system, ArrayList<Peer> group) throws InterruptedException {
 
         // Create three clients
         ActorRef client1 = system.actorOf(Client.props(1));
@@ -89,6 +90,8 @@ public class DHTSystem {
         System.out.println(">>> Press 5 to crash <<<");
         System.out.println(">>> Press 6 to recover <<<");
         System.out.println(">>> Press 7 to test sequential consistency <<<");
+        System.out.println(">>> Press 8 to test join and leave <<<");
+        System.out.println(">>> Press 9 to test crash and recovery <<<");
         System.out.println(">>> Press ctrl+C to exit <<<");
         
         
@@ -195,6 +198,23 @@ public class DHTSystem {
                     // Test sequential consistency
                     test.testSequentialConsistency();
                     break;
+
+                case 8:         // Test join and leave
+
+                    // Initialize class test
+                    Test test1 = new Test(system, group);
+                    // Test sequential join/leave
+                    test1.testJoinLeave(system);
+                    break;
+
+                case 9:         // Test crash and recovery
+
+                    // Initialize class test
+                    Test test2 = new Test(system, group);
+                    // Test sequential crash and recovery
+                    test2.testCrashRecovery(system);
+                    break;
+
 
                 default:
                     System.out.println("Insert a value from 1 to 7");
