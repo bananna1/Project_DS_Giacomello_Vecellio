@@ -939,6 +939,7 @@ public class Ring {
                 else if (msg.requestType == RequestType.ReadRecovery) {
                     System.out.println("Ho finito di fare il read recovery");
                     currExternalRequest = null;
+                    printNode();
                 }
             }
             //System.out.print("On return value msg");
@@ -1034,7 +1035,6 @@ public class Ring {
 
             // Check if the node has really crashed
             if(!hasCrashed){ 
-                //VariabileProva = 0;
                 getSender().tell(new ErrorMsg("Error message for your Recovery Request for node "  + this.id + ". This node is not crashed"), getSelf());
                 return;
             }
@@ -1052,33 +1052,24 @@ public class Ring {
 
         public void onSendPeerListRecoveryMsg(SendPeerListRecoveryMsg msg) {
             this.peers = msg.group;
+            System.out.println("Recovering node updated peers: " + printPeers());
 
             // Forgets the items it is no longer responsible for
             // First index of first node for each item of the node
-
             Enumeration<Integer> en = storage.keys();
             Hashtable<Integer, Item> newStorage = new Hashtable<>();
-            while (en.hasMoreElements()) {
+            while(en.hasMoreElements()) {
                 int key = en.nextElement();
-                
                 int indexOfFirstNode = getIndexOfFirstNode(key);
-
-                // Check if you are among the N nodes that can hold the item
                 if (isNodeResponsibleForItem(indexOfFirstNode)) {
-                    
-                    Enumeration<Integer> e = storage.keys();
-
-                    while (e.hasMoreElements()) {
-                        int key1 = e.nextElement();
-                        if (key != key1) {
-                            newStorage.put(key1, storage.get(key1));
-                            System.out.println("HO TENUTO: " + key1);
-                        }
-                    }
+                    newStorage.put(key, storage.get(key));
                 }
             }
 
+
             this.storage = newStorage;
+            System.out.print("Items of recovering node BEFORE ASKING ANTI-CLOCKWISE NEIGHBOUR: ");
+            printNode();
 
             int my_index = getMyIndex();
             int antiClockwiseNeighbor = my_index - 1;
@@ -1104,25 +1095,16 @@ public class Ring {
                 // RECOVERY TERMINATO PERCHE' NON SERVE FARE IL READ DEGLI ITEM VISTO CHE LO STORAGE E' VUOTO
                 currExternalRequest = null;
             }
-
-            Enumeration<Integer> e1 = storage.keys();
+            Enumeration<Integer> e1 = msg.items.keys();
             while (e1.hasMoreElements()) {
                 int key = e1.nextElement();
-                System.out.println(storage.get(key).getValue());
-            }
-
-            Enumeration<Integer> e = msg.items.keys();
-
-            while (e.hasMoreElements()) {
-                int key = e.nextElement();
-
                 int indexOfFirstNode = getIndexOfFirstNode(key);
-                if (isNodeResponsibleForItem(indexOfFirstNode)) {
-                    
+                if (!this.storage.containsKey(key) && isNodeResponsibleForItem(indexOfFirstNode)) {
                     this.storage.put(key, msg.items.get(key));
-                    System.out.println("Ho inserito la chiave " + key + " nello storage");
                 }
             }
+            System.out.print("Final items of recovering node BEFORE THE READ: ");
+            printNode();
 
             Enumeration<Integer> en = storage.keys();
             
@@ -1132,7 +1114,7 @@ public class Ring {
                 getSender().tell(new GetValueMsg(key, RequestType.ReadRecovery), getSelf());
             }
 
-            //printNode();
+        
         }
 
         @SuppressWarnings("unchecked")
