@@ -426,7 +426,7 @@ public class Ring {
 
         public String printPeers() {
             String s = "[";
-            for (Peer p : peers) {
+            for (Peer p : this.peers) {
                 s += p.getID() + " ";
             }
             s += "]";
@@ -506,7 +506,6 @@ public class Ring {
             else { //UPDATE
                 // SE NON CI SONO READ DELL'ITEM O UPDATE DELL'ITEM, ACCESS GRANTED
                 if (i == null) {
-                    System.out.println("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
                     i = new Item(msg.request.getKey(), "", 0); // version 0 is useful to identify that the item is new
                     storage.put(msg.request.getKey(), i);
                 }
@@ -515,7 +514,8 @@ public class Ring {
                     System.out.println("Access GRANTED for update operation - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
                 }
                 else{
-                    System.out.println("Access DENIED for update operation - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
+                    System.out.println("LOCKED UPDATE: " +  i.isLockedUpdate() + ", LOCKED READ: " + i.isLockedRead());
+                    //System.out.println("Access DENIED for update operation - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
                 }
 
             }
@@ -593,6 +593,10 @@ public class Ring {
 
                 if(msg.request.getType() == RequestType.Read || msg.request.getType() == RequestType.ReadJoin || msg.request.getType() == RequestType.ReadRecovery){    //READ
                     if (nResponses >= read_quorum) {
+
+                        activeRequests.remove(msg.request);
+                        msg.request.getOwner().tell(new UnlockMsg(msg.request), getSelf());
+
                         if (msg.request.getCurrBest() == null) {
                             msg.request.getClient().tell(new ErrorMsg("Error message for Read Request - request id: " + msg.request.getID() + ", key: " + msg.request.getKey() + ". Value does not exist in the ring"), getSelf());
                         }
@@ -600,8 +604,7 @@ public class Ring {
                             msg.request.getClient().tell(new ReturnValueMsg(currBest, msg.request.getID(), msg.request.getType()), getSelf());
                         }
 
-                        activeRequests.remove(msg.request);
-                        msg.request.getOwner().tell(new UnlockMsg(msg.request), getSelf());
+                        
 
                     }
                 }
@@ -656,7 +659,7 @@ public class Ring {
             if(this.hasCrashed){ return; }
 
             int key = msg.request.getKey();
-            if (msg.request.getType() == RequestType.Read) {
+            if (msg.request.getType() == RequestType.Read || msg.request.getType() == RequestType.ReadJoin || msg.request.getType() == RequestType.ReadRecovery) {
                 this.storage.get(key).unlockRead();
             }
             else {
@@ -713,13 +716,13 @@ public class Ring {
         public void onTimeoutDequeue(TimeoutDequeue msg) {
             //System.out.println("SONO NEL TIMEOUT DEQUEUEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE");
             while (!this.requestQueue.isEmpty()) {
-                System.out.println("Queue size: " + requestQueue.size()); // Debugging output
-                System.out.println("STO FACENDO IL DEQUEUE");
+                //System.out.println("Queue size: " + requestQueue.size()); // Debugging output
+                //System.out.println("STO FACENDO IL DEQUEUE");
                 Request r = requestQueue.remove();
-                System.out.println("Removed request: " + r); // Debugging output
+                //System.out.println("Removed request: " + r); // Debugging output
                 activeRequests.add(r);
                 startRequest(r);
-                System.out.println("Request processed: " + r); // Debugging output
+                //System.out.println("Request processed: " + r); // Debugging output
             }
             setTimeoutDequeue(TIMEOUT_DEQUEUE);
         }
@@ -762,20 +765,20 @@ public class Ring {
                 if (request.getType() == RequestType.Read) {
                     if (request.getnResponses() < read_quorum) {
                         activeRequests.remove(request);
-                        System.out.println("Sono nella funzione di timeout, sto togliendo l'elemento, queue size: " + requestQueue.size());
+                        //System.out.println("Sono nella funzione di timeout, sto togliendo l'elemento, queue size: " + requestQueue.size());
                         requestQueue.remove(request);
                         pendingRequests.remove(request);
-                        System.out.println("Sono nella funzione di timeout, ho tolto l'elemento, queue size: " + requestQueue.size());
+                        //System.out.println("Sono nella funzione di timeout, ho tolto l'elemento, queue size: " + requestQueue.size());
                         request.getClient().tell(new ErrorMsg("Your Read request " + msg.id_request + " took too much to be satisfied"), getSelf());
                     }
                 }
                 else {
                     if (request.getnResponses() < write_quorum || request.getOkResponses() < write_quorum) {
                         activeRequests.remove(request);
-                        System.out.println("Sono nella funzione di timeout, sto togliendo l'elemento, queue size: " + requestQueue.size());
+                        //System.out.println("Sono nella funzione di timeout, sto togliendo l'elemento, queue size: " + requestQueue.size());
                         requestQueue.remove(request);
                         pendingRequests.remove(request);
-                        System.out.println("Sono nella funzione di timeout, ho tolto l'elemento, queue size: " + requestQueue.size());
+                        //System.out.println("Sono nella funzione di timeout, ho tolto l'elemento, queue size: " + requestQueue.size());
                         request.getClient().tell(new ErrorMsg("Your Update request " + msg.id_request +  " took too much to be satisfied"), getSelf());
                     }
                 }
@@ -937,7 +940,7 @@ public class Ring {
                     }
                 }
                 else if (msg.requestType == RequestType.ReadRecovery) {
-                    System.out.println("Ho finito di fare il read recovery");
+                    //System.out.println("Ho finito di fare il read recovery");
                     currExternalRequest = null;
                     printNode();
                 }
@@ -956,6 +959,7 @@ public class Ring {
             if (this.id != msg.joiningNodeKey) {
                 addPeer(new Peer(msg.joiningNodeKey, getSender()));
             }
+            System.out.println("Node " + this.id + "'s peers: " + printPeers());
             Hashtable<Integer, Item> newStorage = new Hashtable<>();
             Enumeration<Integer> e = storage.keys();
             while (e.hasMoreElements()) {
@@ -1051,7 +1055,7 @@ public class Ring {
         }
 
         public void onSendPeerListRecoveryMsg(SendPeerListRecoveryMsg msg) {
-            this.peers = msg.group;
+            setGroup(msg.group);
             System.out.println("Recovering node updated peers: " + printPeers());
 
             // Forgets the items it is no longer responsible for
@@ -1068,7 +1072,7 @@ public class Ring {
 
 
             this.storage = newStorage;
-            System.out.print("Items of recovering node BEFORE ASKING ANTI-CLOCKWISE NEIGHBOUR: ");
+            //System.out.print("Items of recovering node BEFORE ASKING ANTI-CLOCKWISE NEIGHBOUR: ");
             printNode();
 
             int my_index = getMyIndex();
@@ -1103,7 +1107,7 @@ public class Ring {
                     this.storage.put(key, msg.items.get(key));
                 }
             }
-            System.out.print("Final items of recovering node BEFORE THE READ: ");
+            //System.out.print("Final items of recovering node BEFORE THE READ: ");
             printNode();
 
             Enumeration<Integer> en = storage.keys();

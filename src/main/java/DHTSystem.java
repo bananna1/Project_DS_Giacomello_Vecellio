@@ -92,6 +92,7 @@ public class DHTSystem {
         System.out.println(">>> Press 7 to test sequential consistency <<<");
         System.out.println(">>> Press 8 to test join and leave <<<");
         System.out.println(">>> Press 9 to test crash and recovery <<<");
+        System.out.println(">>> Press 10 to test all functionalities together <<<");
         System.out.println(">>> Press ctrl+C to exit <<<");
         
         
@@ -215,7 +216,10 @@ public class DHTSystem {
                     test2.testCrashRecovery(system);
                     break;
 
-
+                case 10:
+                    Test test_final = new Test(system, group);
+                    test_final.completeTest(system);
+                    break;
                 default:
                     System.out.println("Insert a value from 1 to 7");
                     break;

@@ -5,6 +5,7 @@ import java.util.concurrent.TimeUnit;
 
 import akka.actor.ActorRef;
 import akka.actor.ActorSystem;
+import akka.projection.RetryRecoveryStrategy;
 
 public class Test {
     // Group of Peer in the ring
@@ -249,5 +250,46 @@ public class Test {
             e.printStackTrace();
         }
         System.out.println("TEST 3 COMPLETED");
+    }
+
+    public void completeTest(ActorSystem system) throws InterruptedException {
+        System.out.println("-----------------------------------------------------");
+        System.out.println("The purpose of this test is to test together basically all the functionalities available in the ring to make sure \n that the ring is well-equipped to manage them together, as well \n that the nodes store the correct items and values of said items even after a lot of operations");
+        System.out.println("TEST: NODE 10 CRASHES");
+        System.out.println("TEST: NODE 20 LEAVES");
+        System.out.println("TEST: NODE 55 JOINS");
+        System.out.println("TEST: NODE 57 JOINS");
+        System.out.println("TEST: ITEM WITH KEY 58 AND VALUE 'TEST FINAL 58' IS ADDED TO THE RING");
+        System.out.println("TEST: ITEM WITH KEY 49 IS MODIFIED TO 'TEST FINAL 49'");
+        System.out.println("TEST: NODE 10 RECOVERS");
+        
+        // NODE 10 CRASHES
+        group.get(0).getActor().tell(new Ring.CrashRequestMsg(), client3);
+        Thread.sleep(5500);
+
+        // NODE 20 LEAVES
+        group.get(1).getActor().tell(new Ring.LeaveRequestMsg(), client1);
+        Thread.sleep(5500);
+
+        // NODE 55 JOINS
+        Peer p_55 = new Peer(55, system.actorOf(Ring.Node.props(55), "peer" + 55));
+        group.get(3).getActor().tell(new Ring.JoinRequestMsg(p_55, group.get(4).getActor()), client2);
+        Thread.sleep(5500);
+
+        // NOODE 57 JOINS
+        Peer p_57 = new Peer(57, system.actorOf(Ring.Node.props(57), "peer" + 57));
+        group.get(2).getActor().tell(new Ring.JoinRequestMsg(p_57, group.get(5).getActor()), client1);
+        Thread.sleep(5500);
+
+        // ITEM WITH KEY 58 AND VALUE 'TEST FINAL 58' IS ADDED TO THE RING
+        group.get(1).getActor().tell(new Ring.UpdateValueMsg(58, "TEST_FINAL_58"), client2);
+        Thread.sleep(5500);        
+
+        // ITEM WITH KEY 49 IS MODIFIED TO 'TEST FINAL 49'
+        group.get(3).getActor().tell(new Ring.UpdateValueMsg(49, "TEST_FINAL_49"), client3);
+        Thread.sleep(5500);
+
+        // NODE 10 RECOVERS
+        group.get(0).getActor().tell(new Ring.RecoveryRequestMsg(group.get(4).getActor()), client1);
     }
 }
