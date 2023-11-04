@@ -956,101 +956,177 @@ public class Ring {
             }
         }
 
+        /**
+         * Method to insert the item in the storage based on the item in the msg: if it is new, create a new item, 
+         * otherwise, change the value and update the version
+         * @param msg instance 
+         */
         public void onChangeValueMsg(ChangeValueMsg msg) {
 
+            // If the node has creashed, do nothing
             if(this.hasCrashed){ return; }
 
+            // Create a new item
             Item newItem = new Item(msg.request.getKey(), msg.request.getNewValue(), msg.newVersion);
+            // Put the new item in the store
             this.storage.put(msg.request.getKey(), newItem);
             //System.out.println("New item - key: " + msg.request.getKey() + ", new value: " + storage.get(msg.request.getKey()).getValue() + ", current version: " + storage.get(msg.request.getKey()).getVersion());
-            //System.out.print("On change value msg");
+            
+            // Print the node with the storare
             printNode();
+
+            // Send an Ok msg to the sender
             getSender().tell(new OkMsg(msg.request), getSelf());
         }
 
+        /**
+         * Method to unlock an item
+         * @param msg instance of Unlock message
+         */
         public void onUnlockMsg(UnlockMsg msg) {
 
+            // If the node has creashed, do nothing
             if(this.hasCrashed){ return; }
 
+            // Get the key of the item to unlock
             int key = msg.request.getKey();
+
+            // If it is a read operation
             if (msg.request.getType() == RequestType.Read || msg.request.getType() == RequestType.ReadJoin || msg.request.getType() == RequestType.ReadRecovery) {
+                
+                // Unlock the item for read 
                 this.storage.get(key).unlockRead();
             }
+
+            // If it is a write operation
             else {
+
+                // Unlock the item for write 
                 this.storage.get(key).unlockUpdate();            
             }
         }
 
+        /**
+         * Method to handle acknowledgment messages for update requests. It counts the number of acknowledgments received and, 
+         * when the write quorum condition is met, it sends an unlock message to the request owner and removes the request 
+         * from the pending requests collection, indicating a successful update operation.
+         * @param msg instance of Ok message
+         */
         public void onOkMsg(OkMsg msg) {
 
+            // If the node has creashed, do nothing
             if(this.hasCrashed){ return; }
 
-            // Nota: OkMsg riguarda solo le update requests, quindi non serve differenziare i casi in base al tipo di richiesta
+            // If the request is in the pending requests
             if (pendingRequests.contains(msg.request)) {
+
+                // Increment the number of responses
                 msg.request.incrementOkResponses();
+
+                // If the number of responses is greater than the write quorum
                 if (msg.request.getOkResponses() >= write_quorum) {
-                    for (Peer p : peers) {
-                    }
+                    
+                    // Unlock the item
                     msg.request.getOwner().tell(new UnlockMsg(msg.request), getSelf());
+
+                    // Remove the request from the pending request
                     this.pendingRequests.remove(msg.request);
                 }
             }
         }
 
+        /**
+         * Method to schedule a timeout for the actor after a specified duration. When the timeout occurs, it sends a custom message of type TimeoutRequest to the actor
+         * @param time Time after the timeout occurs 
+         * @param id_request ID of the request to set the timeout for
+         */
         private void setTimeout(int time, int id_request) {
+
+            // Schedule a task to be executed once after a specified time
             getContext().system().scheduler().scheduleOnce(
-                    Duration.create(time, TimeUnit.MILLISECONDS),
+                    Duration.create(time, TimeUnit.MILLISECONDS),                   // Set the duration
                     getSelf(),
-                    new TimeoutRequest(id_request), // the message to send
+                    new TimeoutRequest(id_request),                                 // The message to send
                     getContext().system().dispatcher(), getSelf()
             );
         }
+
+        /**
+         * Method to schedule a timeout for the actor after a specified duration. When the timeout occurs, it sends a custom message of type TimeoutRequest to the actor
+         * @param time Time after the timeout occurs 
+         * @param externalRequestId ID of the external request to set the timeout for
+         */
         private void setTimeoutExternalRequest(int time, int externalRequestId) {
+
+            // Schedule a task to be executed once after a specified time
             getContext().system().scheduler().scheduleOnce(
-                    Duration.create(time, TimeUnit.MILLISECONDS),
+                    Duration.create(time, TimeUnit.MILLISECONDS),                   // Set the duration
                     getSelf(),
-                    new TimeoutExternalRequest(externalRequestId), // the message to send
+                    new TimeoutExternalRequest(externalRequestId),                  // The message to send
                     getContext().system().dispatcher(), getSelf()
             );
         }
 
+        /**
+         * Method to schedule a timeout for the actor after a specified duration. When the timeout occurs, it sends a custom message of type TimeoutRequest to the actor
+         * @param time Time after the timeout occurs 
+         */
         private void setTimeoutDequeue(int time) {
+
+            // Schedule a task to be executed once after a specified times
             getContext().system().scheduler().scheduleOnce(
-                    Duration.create(time, TimeUnit.MILLISECONDS),
+                    Duration.create(time, TimeUnit.MILLISECONDS),                   // Set the duration
                     getSelf(),
-                    new TimeoutDequeue(), // the message to send
+                    new TimeoutDequeue(), 
                     getContext().system().dispatcher(), getSelf()
             );
         }
 
+        /**
+         * Method used to handle the timeout event for dequeuing requests. 
+         * @param msg instance of TimeoutDequeue message
+         */
         public void onTimeoutDequeue(TimeoutDequeue msg) {
-            //System.out.println("SONO NEL TIMEOUT DEQUEUEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE");
+            
+            // If the requests queue is not empty
             while (!this.requestQueue.isEmpty()) {
-                //System.out.println("Queue size: " + requestQueue.size()); // Debugging output
-                //System.out.println("STO FACENDO IL DEQUEUE");
+
+                // Remove the request from the queue
                 Request r = requestQueue.remove();
-                //System.out.println("Removed request: " + r); // Debugging output
+
+                // Add the request to active requests
                 activeRequests.add(r);
+
+                // Start the request
                 startRequest(r);
-                //System.out.println("Request processed: " + r); // Debugging output
             }
+
+            // Set the timeout for dequeue
             setTimeoutDequeue(TIMEOUT_DEQUEUE);
         }
 
+
+        /**
+         * Method to handle timeout events related to join and update requests
+         * @param msg instance of TimeoutRequest message
+         */
         public void onTimeout(TimeoutRequest msg) {
-            //System.out.println("TIMEOUT SCATTATO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+            
+            // Initialize the request
             Request request = null;
 
-            // check if the request is in the active requests
+            // Check if the request is in the active requests
             for (Request r : this.activeRequests) {
                 int i = r.getID();
                 if (i == msg.id_request) {
                     request = r;
-                    System.out.println("Ho trovato la richiesta per la chiave " + request.getKey());
                     break;
                 }
             }
+
+            // If the request is null
             if (request == null) {
+
                 // check if the request is in the request queue
                 for (Request r : this.requestQueue) {
                     int i = r.getID();
@@ -1060,7 +1136,10 @@ public class Ring {
                     }
                 }
             }
+
+            // If the request is null
             if (request == null) {
+
                 // check if the request is in the request queue
                 for (Request r : this.pendingRequests) {
                     int i = r.getID();
@@ -1070,102 +1149,160 @@ public class Ring {
                     }
                 }
             }
+
+            // If the request is not null
             if (request != null) {
-                System.out.println("Ho trovato la richiesta che ha fatto scattare il timeout");
+                
+                // If it is a read request
                 if (request.getType() == RequestType.Read) {
+
+                    // If the number of resposes is smaller than the read quorum
                     if (request.getnResponses() < read_quorum) {
+
+                        // Remove the request from the active requests
                         activeRequests.remove(request);
-                        //System.out.println("Sono nella funzione di timeout, sto togliendo l'elemento, queue size: " + requestQueue.size());
+                        // Remove the request from the request queue
                         requestQueue.remove(request);
+                        // Remove the request from the pending requests
                         pendingRequests.remove(request);
-                        //System.out.println("Sono nella funzione di timeout, ho tolto l'elemento, queue size: " + requestQueue.size());
+                        
+                        // Send an error to the client
                         request.getClient().tell(new ErrorMsg("Your Read request " + msg.id_request + " took too much to be satisfied"), getSelf());
                     }
                 }
+
+                // If it is an update request
                 else {
+
+                    // If the number of resposes is smaller than the write quorum
                     if (request.getnResponses() < write_quorum || request.getOkResponses() < write_quorum) {
+
+                        // Remove the request from the active requests
                         activeRequests.remove(request);
-                        //System.out.println("Sono nella funzione di timeout, sto togliendo l'elemento, queue size: " + requestQueue.size());
+                        // Remove the request from the request queue
                         requestQueue.remove(request);
+                        // Remove the request from the pending requests
                         pendingRequests.remove(request);
-                        //System.out.println("Sono nella funzione di timeout, ho tolto l'elemento, queue size: " + requestQueue.size());
+                        
+                        // Send an error to the client
                         request.getClient().tell(new ErrorMsg("Your Update request " + msg.id_request +  " took too much to be satisfied"), getSelf());
                     }
                 }
             }
         }
+        
+        /**
+         * Method to handle timeout events related to external requests
+         * @param msg instance of TimeoutExternlRequest message
+         */
         public void onTimeout(TimeoutExternalRequest msg) {
-            /*
-            if (currJoiningNodeRequest != null && currJoiningNodeRequest.getJoiningPeer() == msg.request.getJoiningPeer() && currJoiningNodeRequest.getID() == msg.request.getID()) { // TODO VEDI TUTTI I CASI
-                System.out.println("");
-                currJoiningNodeRequest = null;
-                msg.request.getClient().tell(new ErrorMsg("Your Join request " + msg.request.getID() +  " took too much to be satisfied"), getSelf());
-            }
-             */
+            
+            // If it is a join request
             if (currExternalRequest != null && currExternalRequest.getType() == ExternalRequestType.Join && currExternalRequest.getID() == msg.externalRequestId) {
+
+                // Get the client
                 ActorRef client = currExternalRequest.getClient();
                 currExternalRequest = null;
+
+                // Send an error to the client
                 client.tell(new ErrorMsg("Error message for your Join Request - Joining node ID" + this.getID() + "Your join request took too much to be satisfied"), getSelf());
             }
+
+            // If it is a recovery request
             else if (currExternalRequest != null && currExternalRequest.getType() == ExternalRequestType.Recovery && currExternalRequest.getID() == msg.externalRequestId) {
+                
+                // Get the client
                 ActorRef client = currExternalRequest.getClient();
                 currExternalRequest = null;
+
+                // Send an error to the client
                 client.tell(new ErrorMsg("Error message for your Recovery Request - Joining node ID" + this.getID() + "Your join request took too much to be satisfied"), getSelf());
             }
         }
 
+
+        /**
+         * Method to handle join requests by checking whether the joining node's ID is already taken.
+         * @param msg instance of JoinRequest message
+         */
         public void onJoinRequestMsg(JoinRequestMsg msg) {
 
+            // If the node has creashed, do nothing
             if(this.hasCrashed){ return; }
 
-            // Error message if the key already exists
+            // Set the variable to false
             boolean alreadyTaken = false;
+
+            // For every peer in the ring
             for(Peer peer : peers){
-                //System.out.println("Id peer: " + peer.getID());
+               
+                // If the ID of the peer is equal to the ID of the joining node
                 if(peer.getID() == msg.joiningPeer.getID()) {
+
+                    // Send an error message because the ID is already taken
                     getSender().tell(new ErrorMsg("Error message for your Join Request - Joining node ID" + msg.joiningPeer.getID() + ". This ID is already taken"), getSelf());
+                    // Set the variable to true
                     alreadyTaken = true;
                     break;
                 }
             }
-            System.out.println("Valore di alreadyTaken: " + alreadyTaken);
+            
+            // If the ID is not already taken
             if(!alreadyTaken){
-                //System.out.println("SONO QUA X2");
+                
                 // Create an external request with type::Join
                 ExternalRequest request = new JoinRequest(getSender());
+
                 System.out.println("BN; Join requested to node " + this.id);
 
                 // Send peer list to the joining node
                 msg.joiningPeer.getActor().tell(new SendPeerListMsg(Collections.unmodifiableList(new ArrayList<>(this.peers)), request), getSelf());
             }
-            
-
         }
 
+        /**
+         * Method to update the list of peers, identify the clockwise neighbor, schedule a timeout for the joining process, 
+         * and send a message to the neighbor node to retrieve a list of items
+         * @param msg instance of SendPeerList message
+         */
         public void onSendPeerListMsg(SendPeerListMsg msg) {
 
-            if(this.hasCrashed){ return; } //TODO VEDERE SE TOGLIERE CONTROLLO VISTO CHE IL NODO NON PUO' ESSERE CRASHATO
+            // If the node has creashed, do nothing
+            if(this.hasCrashed){ return; } 
+
+            // Set the external request to the message request
             currExternalRequest = msg.request;
             // Add myself to the list of peer
             List<Peer> updatedGroup = addPeer(new Peer(id, getSelf()), msg.group);
 
+            // Update the group
             setGroup(updatedGroup);
 
             // Find the clockwise neighbor node
-            int indexClockwiseNode = getIndexOfFirstNode(this.id) + 1; // ALTRIMENTI TROVA SE STESSO; IN QUESTO MODO TROVA IL NODO IMMEDIATAMENTE SUCCESSIVO A SE STESSO
+            int indexClockwiseNode = getIndexOfFirstNode(this.id) + 1;
             if (indexClockwiseNode == peers.size()) {
-                indexClockwiseNode = 0; // System.out.println("Ho finito di fare il read join");se il nuovo nodo è l'ultimo allora il clockwise neighbor è il primo della lista
+                indexClockwiseNode = 0;
             }
-            // Send message to the clockwise node in order to retrieve the list of items
+
+            // Set the neighbor to the clockwise node
             Peer neighbor = peers.get(indexClockwiseNode);
             System.out.println("JN; Got SendPeerList message. Found clockwise neighbor: " + neighbor.getID());
+
+            // Set the timeout
             setTimeoutExternalRequest(TIMEOUT_JOIN, currExternalRequest.getID());
+
+            // Send message to the clockwise node in order to retrieve the list of items
             neighbor.getActor().tell(new GetNeighborItemsMsg(), getSelf());
 
         }
 
+        /**
+         * Method used to handle a request from a joining node to retrieve items
+         * @param msg instance of GetNeighborItems message
+         */
         public void onGetNeighborItemsMsg(GetNeighborItemsMsg msg){
 
+            // If the node has creashed, do nothing
             if(this.hasCrashed){ return; }
 
             // Send message to the joining node with the items list
@@ -1173,20 +1310,34 @@ public class Ring {
             getSender().tell(new SendItemsListMsg(storage), getSelf());
         }
         
+        /**
+         * Method used to processe a message containing a list of items, add these items to the local storage, 
+         * and initiate read requests for each item. 
+         * @param msg instance of SendItemsList message
+         */
         public void onSendItemsListMsg(SendItemsListMsg msg) {
 
-            if(this.hasCrashed){ return; } // TODO VEDERE SE TOGLIERLO PERCHE' QUESTO METODO VIENE ESEGUITO SOLO DA UN JOINING NODE E QUINDI QUA IL NODO NON PUO' ESSERE CRASHATO
+            // If the node has creashed, do nothing
+            if(this.hasCrashed){ return; } 
+
             // Set the storage of the joining node
             this.storage = msg.items;
             System.out.println("JN; Inserted items in storage, requesting read on each item");
-            System.out.println("STAMPO LO STORAGE DEL NUOVO NODO");
 
+            // If the storage is empty
             if (storage.size() == 0) {
+
+                // Set the external request to null
                 currExternalRequest = null;
+
+                // For every peer in the ring
                 for (Peer p : peers) {
+
+                    // Send an announce message
                     p.getActor().tell(new AnnounceJoiningNodeMsg(this.id, new ArrayList<>()), getSelf());
                 }
             }
+
             // Creating  Enumeration interface and get keys() from Hashtable
             Enumeration<Integer> e = storage.keys();
 
@@ -1200,13 +1351,12 @@ public class Ring {
                 // Send a read request for every items
                 getSender().tell(new GetValueMsg(key, RequestType.ReadJoin), getSelf());
             }
-
-
-
         }
+
         public void onReturnValueMsg(ReturnValueMsg msg) {
 
-            if(this.hasCrashed){ return; } // NON HA SENSO PERCHE' QUESTO METODO VIENE ESEGUITO SOLO IN CASO DI RECOVERY E JOIN
+            // If the node has creashed, do nothing
+            if(this.hasCrashed){ return; } 
 
             currExternalRequest.incrementnResponses();
             //System.out.println("Received return message for key " + msg.item.getKey() + ", value: " + msg.item.getValue() + ", version: " + msg.item.getVersion());
@@ -1214,7 +1364,6 @@ public class Ring {
             if(storage.containsKey(msg.item.getKey())){
                 if(msg.item.getVersion() >= storage.get(msg.item.getKey()).getVersion()) {
                     storage.put(msg.item.getKey(), msg.item);
-                    //System.out.println("Changed item version");
                 }
                 //System.out.println("IF; Item in storage: " + storage.get(msg.item.getKey()).getKey() + " " + storage.get(msg.item.getKey()).getValue() + " " + storage.get(msg.item.getKey()).getVersion());
             } else {
@@ -1225,7 +1374,6 @@ public class Ring {
 
             if(currExternalRequest.getnResponses() == storage.size()) {
                 if(msg.requestType == RequestType.ReadJoin){
-                    //System.out.println("Ho finito di fare il read join");
                     List<Item> items = new ArrayList<>();
 
                     // Creating  Enumeration interface and get keys() from Hashtable
@@ -1250,14 +1398,10 @@ public class Ring {
                     }
                 }
                 else if (msg.requestType == RequestType.ReadRecovery) {
-                    //System.out.println("Ho finito di fare il read recovery");
                     currExternalRequest = null;
                     printNode();
                 }
             }
-            //System.out.print("On return value msg");
-            //printNode();
-
         }
 
         public void onAnnounceJoiningNodeMsg(AnnounceJoiningNodeMsg msg) {
