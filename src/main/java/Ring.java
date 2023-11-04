@@ -1353,27 +1353,43 @@ public class Ring {
             }
         }
 
+        /**
+         * Method to process messages containing returned values (items) and update the local storage with the most up-to-date versions of items.
+         * @param msg instance of ReturnValue message
+         */
         public void onReturnValueMsg(ReturnValueMsg msg) {
 
             // If the node has creashed, do nothing
             if(this.hasCrashed){ return; } 
 
+            // Increment the number of responses
             currExternalRequest.incrementnResponses();
+
             //System.out.println("Received return message for key " + msg.item.getKey() + ", value: " + msg.item.getValue() + ", version: " + msg.item.getVersion());
-            // Change version if it is not updated
+            
+            // If the storage contains that key
             if(storage.containsKey(msg.item.getKey())){
+
+                // If the version is not updated
                 if(msg.item.getVersion() >= storage.get(msg.item.getKey()).getVersion()) {
+
+                    // Change the version
                     storage.put(msg.item.getKey(), msg.item);
                 }
-                //System.out.println("IF; Item in storage: " + storage.get(msg.item.getKey()).getKey() + " " + storage.get(msg.item.getKey()).getValue() + " " + storage.get(msg.item.getKey()).getVersion());
+            
+            // If the storage do not contain that key
             } else {
+
+                // Put the item in the storgae
                 storage.put(msg.item.getKey(), msg.item);
-                //System.out.println("ELSE; Item in storage: " + storage.get(msg.item.getKey()).getKey() + " " + storage.get(msg.item.getKey()).getValue() + " " + storage.get(msg.item.getKey()).getVersion());
-                
             }
 
+            // If the number of responses is equal to the storage size
             if(currExternalRequest.getnResponses() == storage.size()) {
+
+                // If it is a readJoin request
                 if(msg.requestType == RequestType.ReadJoin){
+
                     List<Item> items = new ArrayList<>();
 
                     // Creating  Enumeration interface and get keys() from Hashtable
@@ -1392,11 +1408,13 @@ public class Ring {
                     }
                     currExternalRequest = null;
 
-                    // Send announceJoiningNodeMsg
+                    // Send announceJoiningNodeMsg to all peers
                     for (Peer peer : peers) {
                         peer.getActor().tell(new AnnounceJoiningNodeMsg(this.getID(), items), getSelf());
                     }
                 }
+
+                // If it is a readRecovery request
                 else if (msg.requestType == RequestType.ReadRecovery) {
                     currExternalRequest = null;
                     printNode();
@@ -1404,131 +1422,207 @@ public class Ring {
             }
         }
 
+        /**
+         * Method to processe messages announcing the joining of a new node into the distributed system
+         * @param msg instance of AnnounceJoiningNode message 
+         */
         public void onAnnounceJoiningNodeMsg(AnnounceJoiningNodeMsg msg) {
-
+            
+            // If the node has creashed, do nothing
             if(this.hasCrashed){ return; }
 
-            //System.out.println("Node " + this.id + " received joining announcement");
             // Update the list of peers
             if (this.id != msg.joiningNodeKey) {
                 addPeer(new Peer(msg.joiningNodeKey, getSender()));
             }
-            System.out.println("Node " + this.id + "'s peers: " + printPeers());
+
+            // Create the new storage
             Hashtable<Integer, Item> newStorage = new Hashtable<>();
             Enumeration<Integer> e = storage.keys();
+
+            // For all the keys
             while (e.hasMoreElements()) {
+
                 int key = e.nextElement();
                 int index = getIndexOfFirstNode(key);
+
+                // If the node is responsible for that item
                 if (isNodeResponsibleForItem(index)) {
+
+                    // Insert the value and the key in the storage
                     newStorage.put(key, storage.get(key));
                 }
             }
+
             this.storage = newStorage;
             printNode();
-
         }
 
+        
+        /**
+         * Method used to announce a node leaving, transfer the items it was responsible for to the new appropriate nodes, 
+         * set the currExternalRequest to null, and notify all other nodes about its departure. 
+         * @param msg instance of LeaveRequest message
+         */
         public void onLeaveRequestMsg(LeaveRequestMsg msg) {
 
+            // If the node has creashed, do nothing
             if(this.hasCrashed){ return; }
 
             Enumeration<Integer> e = storage.keys();
 
-            // take each item in storage and tell the new node responsible for them to insert it in its storage
+            // Take each item in storage and tell the new node responsible for them to insert it in its storage
             while (e.hasMoreElements()) {
+
                 int key = e.nextElement();
                 Item i = storage.get(key);
                 int indexOfLastNode = getIndexOfLastNode(key);
                 int newIndexOfLastnode = (indexOfLastNode + 1) % peers.size();
                 Peer newLastPeer = peers.get(newIndexOfLastnode);
+
                 System.out.println("Node " + peers.get(newIndexOfLastnode).getID() + " is now responsible for key " + i.getKey());
+
                 newLastPeer.getActor().tell(new AddItemToStorageMsg(i), getSelf());
             }
 
-            // find index of leaving node
+            // Find index of leaving node
             int leavingNodeIndex = 0;
+
             for(int i = 0; i < peers.size(); i++) {
+
                 Peer p = peers.get(i);
+
                 if (p.getID() == this.id) {
+
                     leavingNodeIndex = i;
                     break;
                 }
             }
-            currExternalRequest = null; // serve nel caso lo stesso nodo venga riutilizzato per un successivo join (non so se si possa fare ma in caso siamo coperti)
+
+            currExternalRequest = null; 
+
+            // For every peer send an announce leaving message
             for (Peer p : peers) {
+
                 p.getActor().tell(new AnnounceLeavingNodeMsg(leavingNodeIndex), getSelf());
             }
         }
 
+        /**
+         * Method used to add an item to the store
+         * @param msg instance AddItemToStorage message
+         */
         public void onAddItemToStorageMsg(AddItemToStorageMsg msg) {
 
+            // If the node has creashed, do nothing
             if(this.hasCrashed){ return; }
-
+            
+            // Insert the item in the storage
             storage.put(msg.item.getKey(), msg.item);
         }
 
+        /**
+         * Method to handle the case where a node announces its departure from the network, 
+         * and it updates the list of peers for the current node by removing the leaving node from the list.
+         * @param msg instance of AnnounceLeavingNode message
+         */
         public void onAnnounceLeavingNodeMsg(AnnounceLeavingNodeMsg msg) {
 
+            // If the node has creashed, do nothing
             if(this.hasCrashed){ return; }
 
             System.out.println("Node " + this.id + " has received announcement of node leaving");
+
+            // Remove the leaving node
             boolean isMe = (peers.get(msg.leavingNodeIndex).getID() == this.id);
             peers.remove(msg.leavingNodeIndex);
             System.out.println("Node " + this.id + "'s peers: " + this.printPeers());
+
+            // Print the node
             if(!isMe) {
                 printNode();
             }
         }
 
+        /**
+         * Method to set the node that has crashed
+         * @param msg instance of CrashRequest message
+         */
         public void onCrashRequestMsg(CrashRequestMsg msg) {
-            // TODO decidere se fare i controlli anche su leave e join
+            
+            // Set crash to true
             this.hasCrashed = true;
 
             System.out.println("Node " + this.getID() + " has crashed");
         }
 
+        /**
+         * Method to handle recovery requests, either by sending an error response if the node is not in a crashed state 
+         * or by transitioning the node from a crashed state to a normal state and initiating the recovery process
+         * @param msg instance of RecoveryRequest message
+         */
         public void onRecoveryRequestMsg(RecoveryRequestMsg msg) {
-
-            // TODO decidere se controllare se vengono fatti read e update
 
             // Check if the node has really crashed
             if(!hasCrashed){ 
+
+                // Send an error to the client
                 getSender().tell(new ErrorMsg("Error message for your Recovery Request for node "  + this.id + ". This node is not crashed"), getSelf());
                 return;
             }
+
+            // Set crash to false
             hasCrashed = false;
+
+            // Crete a new request for recovery
             ExternalRequest request = new RecoveryRequest(getSender());
             this.currExternalRequest = request;
-            setTimeoutExternalRequest(TIMEOUT_RECOVERY, request.getID());
-            msg.nodeToContact.tell(new GetPeerListMsg(), getSelf());
 
+            // Set the timeout for the request
+            setTimeoutExternalRequest(TIMEOUT_RECOVERY, request.getID());
+
+            // Send a message to retrieve the peer list
+            msg.nodeToContact.tell(new GetPeerListMsg(), getSelf());
         }
 
+        /**
+         * Method used to send the peer list message
+         * @param msg instance of GetPeerList message
+         */
         public void onGetPeerListMsg(GetPeerListMsg msg) {
+
+            // Send a message to retrieve the peer list
             getSender().tell(new SendPeerListRecoveryMsg(Collections.unmodifiableList(new ArrayList<>(this.peers))), getSelf());
         }
 
+        /**
+         * Method to update the node's group, storage, and initiate the retrieval of items it should be responsible for from its anti-clockwise neighbor
+         * @param msg instance of SendPeerListRecovery message
+         */
         public void onSendPeerListRecoveryMsg(SendPeerListRecoveryMsg msg) {
+
+            // Set the group
             setGroup(msg.group);
             System.out.println("Recovering node updated peers: " + printPeers());
 
-            // Forgets the items it is no longer responsible for
-            // First index of first node for each item of the node
             Enumeration<Integer> en = storage.keys();
             Hashtable<Integer, Item> newStorage = new Hashtable<>();
             while(en.hasMoreElements()) {
+
+                // First index of first node for each item of the node
                 int key = en.nextElement();
                 int indexOfFirstNode = getIndexOfFirstNode(key);
+
+                // Forgets the items it is no longer responsible for
                 if (isNodeResponsibleForItem(indexOfFirstNode)) {
                     newStorage.put(key, storage.get(key));
                 }
             }
 
-
             this.storage = newStorage;
-            //System.out.print("Items of recovering node BEFORE ASKING ANTI-CLOCKWISE NEIGHBOUR: ");
             printNode();
 
+            // Get the anticlockwise neighbor
             int my_index = getMyIndex();
             int antiClockwiseNeighbor = my_index - 1;
             if(antiClockwiseNeighbor == -1) {
@@ -1542,21 +1636,38 @@ public class Ring {
             
         }
         
+        /**
+         * Method used to get the list of items
+         * @param msg instance of GetItemsList message
+         */
         public void onGetItemsListMsg(GetItemsListMsg msg){
 
+            // Send a message to retrieve the list of items
             getSender().tell(new SendItemsListRecoveryMsg(this.storage), getSelf());
 
         }
 
+        /**
+         * Method responsible for updating the node's storage with items received during the recovery process and sending read requests to update the values of these items
+         * @param msg instance of SendItemsListRecovery message
+         */
         public void onSendItemsListRecoveryMsg(SendItemsListRecoveryMsg msg){
+
+            // If the storage is empty and there are no items in the message
             if (storage.size() == 0 && msg.items.size() == 0) {
-                // RECOVERY TERMINATO PERCHE' NON SERVE FARE IL READ DEGLI ITEM VISTO CHE LO STORAGE E' VUOTO
+                
                 currExternalRequest = null;
             }
+
             Enumeration<Integer> e1 = msg.items.keys();
+
+            // Insert all the item in the storage
             while (e1.hasMoreElements()) {
+
                 int key = e1.nextElement();
                 int indexOfFirstNode = getIndexOfFirstNode(key);
+
+                // If the node is responsible for that item
                 if (!this.storage.containsKey(key) && isNodeResponsibleForItem(indexOfFirstNode)) {
                     this.storage.put(key, msg.items.get(key));
                 }
@@ -1569,10 +1680,9 @@ public class Ring {
             while (en.hasMoreElements()) {
                 int key = en.nextElement();
                 
+                // Send a read request to update the value
                 getSender().tell(new GetValueMsg(key, RequestType.ReadRecovery), getSelf());
             }
-
-        
         }
 
         @SuppressWarnings("unchecked")
