@@ -23,6 +23,12 @@ public class Ring {
         public final List<Integer> keys;
         public final List<String> values;
 
+        /**
+         * Constructor for StartMessage
+         * @param group group of peers
+         * @param keys set of initial keys
+         * @param values set of initial values
+         */
         public StartMessage(List<Peer> group, List<Integer> keys, List<String> values) {
               this.group = Collections.unmodifiableList(new ArrayList<>(group));
               this.keys = Collections.unmodifiableList(new ArrayList<>(keys));
@@ -39,14 +45,24 @@ public class Ring {
         }
     }
 
+    // Create instances of messages to request values associated with specific keys, 
+    // and it allows for specifying the request type explicitly or using a default value if not provided.
     public static class GetValueMsg implements Serializable {
         public final int key;
-        //public final boolean isJoin;
         public final Ring.Node.RequestType type;
+        
+        /**
+         * Create instances of messages to request values associated with specific keys with a specified request type
+         * @param key key from which to request the value 
+         * @param type request type
+         */
         public GetValueMsg(int key, Ring.Node.RequestType type) {
             this.key = key;
             this.type = type;
         }
+        /**
+         * @param key
+         */
         public GetValueMsg(int key) {
             this.key = key;
             this.type = Ring.Node.RequestType.Read;
@@ -287,7 +303,7 @@ public class Ring {
         }
 
         /*-- Node constructor --------------------------------------------------- */
-        public Node(int id /*boolean isCoordinator, Node next, Node previous*/){
+        public Node(int id){
             super();
             this.id = id;
             setTimeoutDequeue(TIMEOUT_DEQUEUE);
@@ -306,19 +322,39 @@ public class Ring {
             storage.put(key, new Item(key, value, version));
         }
 
+
+        /**
+         * Method to set the initial group (list of peers)
+         * @param group list of initial peers
+         */
         void setGroup(List<Peer> group) {
+
+            // Create a new array list
             this.peers = new ArrayList<>();
+
+            // Add every peer of the group to the list of peers
             for (Peer b: group) {
                 this.peers.add(b);
             }
-            //print("starting with " + sm.group.size() + " peer(s)");
         }
 
+
+        /**
+         * Method to find the first node in a list of peers whose ID is greater than or equal to the given key
+         * @param key Given key 
+         * @return The index of the first node in a list of peers whose ID is greater than or equal to the given key
+         */
         private int getIndexOfFirstNode (int key) {
+
+            // Set the index to 0 (if it is the first node)
             int index = 0;
 
+            // Find the first node in a list of peers whose ID is greater than or equal to the given key
             for (int i = 0; i < peers.size(); i++) {
+
+                // If the key is greater than or equal to the ID of the peer
                 if (peers.get(i).getID() >= key) {
+                    // Set index to the index of the peer
                     index = i;
                     break;
                     // If we're not able to find a node whose ID is greater than the key,
@@ -328,35 +364,86 @@ public class Ring {
             return index;
         }
 
+
+        /** 
+         * Method to find the last node in a list of peers whose ID is smaller than or equal to the given key
+         * @param key Given key 
+         * @return The index of the last node in a list of peers whose ID is smaller than or equal to the given key
+         */
         private int getIndexOfLastNode(int key) {
+
+            // Find the first node in a list of peers whose ID is greater than or equal to the given key
             int indexOfFirstNode = getIndexOfFirstNode(key);
+
+            // Usa a formula to calculate the last node from the first
             int indexOfLastNode = (indexOfFirstNode + N - 1) % peers.size();
+
             return indexOfLastNode;
         }
+
+
+        /** 
+         * Method to add a new peer to a list called peers while maintaining a sorted order based on the ID of the peers. 
+         * @param newPeer new peer to add to the list of peers
+         */
         private void addPeer(Peer newPeer) {
+
+            // Set the initial position to 0
             int newPeerPosition = 0;
+
+            // Find the right position based on the ID of the peers for the new peer
             for (int i = 0; i < peers.size(); i++) {
+
+                // If the ID of the new peer is smaller than the ID of the peer
                 if (newPeer.getID() < peers.get(i).getID()) {
+
+                    // Set the index of the new peer equal to the idex of the peer
                     newPeerPosition = i;
                     break;
                 }
             }
+
+            // Add the new peer in the right position based on the ID of the peers
             peers.add(newPeerPosition, newPeer);
         }
+
+
+        /**
+         * Method to add the new peer to a new list while maintaining a sorted order based on the ID of the peers.
+         * @param newPeer new peer to add to the new list of peers
+         * @param list list of peers
+         * @return new list of peers with the new peer in the right position
+         */
         private List<Peer> addPeer(Peer newPeer, List<Peer> list) {
+
+            // Set the initial position to 0
             int newPeerPosition = 0;
+            // Create the new list of peers
             List<Peer> newList = new ArrayList<>();
+
+            // Find the right position based on the ID of the peers for the new peer
             for (int i = 0; i < list.size(); i++) {
+
+                // If the ID of the new peer is smaller than the ID of the peer
                 if (newPeer.getID() < list.get(i).getID()) {
+
+                    // Set the index of the new peer equal to the idex of the peer
                     newPeerPosition = i;
                     break;
                 }
             }
+
             int listIndex = 0;
+
+            // Create the new list of peers
             for (int j = 0; j < list.size() + 1; j++) {
+
+                // Add the new peers
                 if (j == newPeerPosition) {
                     newList.add(newPeer);
                 }
+
+                // Add the older peers
                 else {
                     newList.add(list.get(listIndex));
                     listIndex++;
@@ -365,41 +452,90 @@ public class Ring {
             return newList;
         }
 
+        /**
+         * Find if the node is responsible for a given item
+         * @param indexOfFirstNode Index of the first node responsible for a given item
+         * @return If the node is resposible for a given item or not
+         */
         private boolean isNodeResponsibleForItem(int indexOfFirstNode) {
+
+            // Get the index of the node
             int myIndex = getMyIndex();
+
+            // If the node is responsible for that item
             if ((myIndex >= indexOfFirstNode && myIndex < indexOfFirstNode + N) || (myIndex <= indexOfFirstNode && myIndex < ((indexOfFirstNode + N) % peers.size()) && ((indexOfFirstNode + N) % peers.size()) < indexOfFirstNode)) {
                 return true;
             }
+
             return false;
         }
 
+
+        /**
+         * Method to find the index of the node
+         * @return the idnex of the node
+         */
         private int getMyIndex() {
+
+            // Set the index to 0
             int my_index = 0;
 
+            // Find the index of the node
             for (int j = 0; j < peers.size(); j++) {
+
+                // If the id is equal to the ID of the peer
                 if (this.id == peers.get(j).getID()) {
+
+                    // Set the index eqaul to the index of the peer
                     my_index = j;
                     break;
                 }
             }
+
             return my_index;
         }
 
+
+        /**
+         *  Method used to create a configuration (Props) for creating a new actor of the Node class with the specified id
+         * @param id id of the new actor
+         * @return An instance of the Props class with the new id
+         */
         static public Props props(int id) {
             return Props.create(Node.class, () -> new Node(id));
         }
 
+
+        /**
+         * Set the initial storage of the ring based on a list of keys and values
+         * @param keys list of initial keys
+         * @param values list of initial values
+         */
         private void setInitialStorage(List<Integer> keys, List<String> values){
+
+            // For every key in the list of keys
             for(int i = 0; i < keys.size(); i++) {
+
+                // Find the first node responsible for the key
                 int indexOfFirstNode = getIndexOfFirstNode(keys.get(i));
+
+                // If the node is responsible for the first key
                 if (isNodeResponsibleForItem(indexOfFirstNode)) {
+
+                    // Put the key and the value into the storage of the node with version 1
                     this.storage.put(keys.get(i), new Item(keys.get(i), values.get(i), 1));
                 }
 
             }
+
+            // Print the node with the storage
             printNode();
         }
 
+
+        /**
+         * Method to print a node with its storage
+         */
         private void printNode(){
             //System.out.print(id + ": {");
             String printString = id + ": {";
@@ -424,221 +560,399 @@ public class Ring {
             System.out.println(printString);
         }
 
+
+        /**
+         * Method to construct the list of peers in order to print it
+         * @return String with the list of peers
+         */
         public String printPeers() {
             String s = "[";
+
+            // For every peer
             for (Peer p : this.peers) {
+                
+                // Add to the string the ID of the peer
                 s += p.getID() + " ";
             }
+
             s += "]";
             return s;
         }
 
+        /**
+         * Method to set the initial group and the initial storage
+         * @param msg instance of StartMessage
+         */
         public void onStartMessage(StartMessage msg) {
+            // Set the initial group
             setGroup(msg.group);
-            setInitialStorage(msg.keys, msg.values);
 
+            // Set the initial storage
+            setInitialStorage(msg.keys, msg.values);
         }
 
+        /**
+         * Method for initiating a request by determining the appropriate owner actor based on the request's key,
+         * setting the owner for the request, printing a log message, and then sending a message to the owner actor to handle the request. 
+         * @param request request to send
+         */
         private void startRequest(Request request){
-            int index = getIndexOfFirstNode(request.getKey());
 
+            // Index of the first node responsible for the item specified in the request
+            int index = getIndexOfFirstNode(request.getKey());
+            
+            // Owner of the item
             ActorRef owner = peers.get(index).getActor();
+            // Set the owner for the request
             request.setOwner(owner);
+
+            // Print the log message with the request
             System.out.println("Request started - id request: " + request.getID() + ", type: " + request.getType() + ", Key: " + request.getKey() + ", client: " + request.getClient());
+            
+            // Send a message to the owner actor to handle the request
             owner.tell(new RequestAccessMsg(request), getSelf());
         }
 
+        /**
+         * Method used to start a read request
+         * @param msg instance of GetValue message
+         */
         private void onGetValueMsg(GetValueMsg msg) {
 
+            // If the node has creashed, do nothing
             if(this.hasCrashed){ return; }
-                
+            
+            // Set the key to the key of the message
             int key = msg.key;
+            // Create a new request
             Request newRequest;
 
+            // If the read request is for join
             if(msg.type == RequestType.ReadJoin) {
+
+                // Create a new read request for join 
                 newRequest = new Request(key, RequestType.ReadJoin, getSender(), null);
             }
+
+            // If the read request is for recovery
             else if (msg.type == RequestType.ReadRecovery) {
+
+                // Create a new read request for recovery 
                 newRequest = new Request(key, RequestType.ReadRecovery, getSender(), null);
             }  
+
+            // If it is a normal read
             else {
+
+                // Create a new read request
                 newRequest = new Request(key, RequestType.Read, getSender(), null);
             }
+
+            // Add the new request to the active requests
             activeRequests.add(newRequest);
+
+            // Set a new timeout for this reques
             setTimeout(TIMEOUT_REQUEST, newRequest.getID());
+
+            // Start the new request
             startRequest(newRequest);
         }
 
+
+        /**
+         * Method to initialize an update/write request
+         * @param msg instance of UpdateValue message
+         */
         private void onUpdateValueMsg(UpdateValueMsg msg){
             
+            // If the node has creashed, do nothing
             if(this.hasCrashed){ return; }
 
+            // Set the key to the key specified in the message
             int key = msg.key;
+            // Set the value to the value specified in the message
             String value = msg.value;
+
+            // Create a new update request
             Request newRequest = new Request(key, RequestType.Update, getSender(), value);
 
+            // Add the new request to the active requests
             activeRequests.add(newRequest);
+            
+            // Set a new timeout for this reques
             setTimeout(TIMEOUT_REQUEST, newRequest.getID());
-            startRequest(newRequest);
 
+            // Start the new request
+            startRequest(newRequest);
         }
 
+        /**
+         * Method to handle access requests, determines whether access is granted or denied based on the type of request and the availability of the requested item, 
+         * and to communicate the access status to the coordinator
+         * @param msg instance of RequestAccess message
+         */
         private void onRequestAccessMsg(RequestAccessMsg msg) {
 
+            // If the node has creashed, do nothing
             if(this.hasCrashed){ return; }
 
-            //System.out.println("Access requested");
+            // Create a new Item for the specified key
             Item i = storage.get(msg.request.getKey());
+            // Initialize the coordinator
             ActorRef coordinator = getSender();
+            // Boolean for accessing the item
             boolean accessGranted;
-            if (msg.request.getType() == RequestType.Read || msg.request.getType() == RequestType.ReadJoin || msg.request.getType() == RequestType.ReadRecovery) { //READ
-                //SE NON CI SONO UPDATE, ACCCESS GRANTED
+
+            // If it is a read request
+            if (msg.request.getType() == RequestType.Read || msg.request.getType() == RequestType.ReadJoin || msg.request.getType() == RequestType.ReadRecovery) {
+                
+                // If the item with that key does not exist
                 if (i == null) {
+
+                    // Access not granted
                     accessGranted = false;
+
+                    // Send a message to the coordinator that the item was not found
                     coordinator.tell(new AccessResponseMsg(accessGranted, true,  msg.request), getSelf());
                     return;
                 }
                 else {
+
+                    // Access granted and lock the item for read
                     accessGranted = i.lockRead();
                 }
 
             }
-            else { //UPDATE
-                // SE NON CI SONO READ DELL'ITEM O UPDATE DELL'ITEM, ACCESS GRANTED
+
+            // If it is an update request
+            else { 
+
+                // If there are no reads for the item and no updates
                 if (i == null) {
+
+                    // Create a new item with that key and value, with version 0
                     i = new Item(msg.request.getKey(), "", 0); // version 0 is useful to identify that the item is new
+
+                    // Put the item in the storage
                     storage.put(msg.request.getKey(), i);
                 }
+
+                // Set access granted to the lock of the item
                 accessGranted = i.lockUpdate();
+
+                // If access granted
                 if (accessGranted) {
+
+                    // Print the request
                     System.out.println("Access GRANTED for update operation - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
                 }
+
+                // If access not granted
                 else{
-                    System.out.println("LOCKED UPDATE: " +  i.isLockedUpdate() + ", LOCKED READ: " + i.isLockedRead());
-                    //System.out.println("Access DENIED for update operation - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
+
+                    // Print access denied for that request
+                    System.out.println("Access DENIED for update operation - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
                 }
 
             }
 
+            // If access granted
             if (accessGranted) {
+
+                // Send a new AccessResponde message
                 coordinator.tell(new AccessResponseMsg(true, false, msg.request), getSelf());
             }
             else {
+
+                // Print access denied for that request
                 System.out.println("Access denied - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
+                
+                // Send a new AccessResponde message
                 coordinator.tell(new AccessResponseMsg(false, false,  msg.request), getSelf());
             }
         }
 
+        /**
+         * Method to sends the request to nodes that has the item if access granted, if not send an error message is the item does not exist
+         * or add the request to the queue
+         * @param msg instance of AccessResponse message
+         */
         private void onAccessResponseMsg(AccessResponseMsg msg) {
 
+            // If the node has creashed, do nothing
             if(this.hasCrashed){ return; }               
 
-            // RICHIESTA SODDISFATTA
+            // If access granted
             if (msg.accessGranted) {
+
+                // Set the key to the key specified in the message
                 int key = msg.request.getKey();
+
+                // Get the index of the first node in the ring that has the key in the storage
                 int index = getIndexOfFirstNode(key);
+
+                // For every peer that has this item
                 for (int i = index; i < N + index; i++) {
+
                     int length = peers.size();
+                    // Find the actor of the peer
                     ActorRef actor = peers.get(i % length).getActor();
+
+                    // Send a request value message to that peer
                     actor.tell(new RequestValueMsg(msg.request), getSelf());
                 }
             }
 
-            // RICHIESTA MESSA IN CODA
+            // If access not granted
             else {
-                if (msg.itemNotFound && msg.request.getType() == RequestType.Read) { // il controllo sul tipo della richiesta è ridondante
+
+                // If the request is for read and the item is not found
+                if (msg.itemNotFound && msg.request.getType() == RequestType.Read) {
+
+                    // Remove the request from the active request
                     activeRequests.remove(msg.request);
+
+                    // Send an error message to the client
                     msg.request.getClient().tell(new ErrorMsg("Error message for Read Request - request id: " + msg.request.getID() + ", key: " + msg.request.getKey() + ". Item not found"), getSelf());
                     return;
                 }
+
+                // Remove the request from the active request
                 activeRequests.remove(msg.request);
+
+                // Add the request to the request queue
                 requestQueue.add(msg.request);
+
+                // Print a message to say that the request is added to the queue
                 System.out.println("Request added to the queue - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
             }
         }
 
+        /**
+         * Method to create a new Item if the requested key is new, and to send a response containing the requested value to the sender. 
+         * @param msg instance of RequestValue message
+         */
         private void onRequestValueMsg(RequestValueMsg msg) {
-
+            
+            // If the node has creashed, do nothing
             if(this.hasCrashed){ return; }
 
+            // Create a new item with that key and value, with version 0
             Item i = storage.get(msg.request.getKey());
+
+            // If the key is new
             if (i == null) {
+
+                // Create the new item
                 i = new Item(msg.request.getKey(), "", 0);
             }
+
+            // Get the sender actor
             ActorRef sender = getSender();
-            RequestType requestType = msg.request.getType();
+            //RequestType requestType = msg.request.getType();
             //System.out.println("value requested - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
+            
+            // Send the request to the sender
             sender.tell(new ValueResponseMsg(i, msg.request), getSelf());
         }
 
+        /**
+         * Method to handle value response messages, to keep track of the number of responses received, update the current best value, 
+         * and make decisions based on the type of request and the number of responses received
+         * @param msg instance of ValueResponse message
+         */
         private void onValueResponseMsg(ValueResponseMsg msg) {
 
+            // If the node has creashed, do nothing
             if(this.hasCrashed){ return; }
 
+            // If the request is in the active request
             if (activeRequests.contains(msg.request)) {
+
+                // Increments a counter in the request object to keep track of the number of responses received for this request
                 msg.request.incrementnResponses();
                 //System.out.println("Response message n. " + msg.request.getnResponses() + " - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
+                
+                // Number of responses
                 int nResponses = msg.request.getnResponses();
+                // Item with the current newest version
                 Item currBest = msg.request.getCurrBest();
+
+                // If the current newest version is null
                 if (currBest == null) {
+
+                    // Set che newest version to the version of the item
                     msg.request.setCurrBest(msg.item);
-                    //System.out.println(msg.item.getValue() + " " + msg.item.getVersion());
-                    //System.out.println("Ho impostato currBest a: " + msg.request.getCurrBest().getValue() + " " + msg.request.getCurrBest().getVersion());
                 }
+
+                // If the current newest version is not null
                 else {
+
+                    // If the version of the item is greater than the current newest version
                     if (msg.item.getVersion() > currBest.getVersion()) {
+
+                        // Set che newest version to the version of the item
                         msg.request.setCurrBest(msg.item);
                     }
                 }
 
-                if(msg.request.getType() == RequestType.Read || msg.request.getType() == RequestType.ReadJoin || msg.request.getType() == RequestType.ReadRecovery){    //READ
-                    if (nResponses >= read_quorum) {
+                // If it is a read request
+                if(msg.request.getType() == RequestType.Read || msg.request.getType() == RequestType.ReadJoin || msg.request.getType() == RequestType.ReadRecovery){
 
+                    // If the number of responses is greater or equal to the read quorum
+                    if (nResponses >= read_quorum) {
+                        
+                        // Remove the request from the active requests
                         activeRequests.remove(msg.request);
+
+                        // Unlock the item
                         msg.request.getOwner().tell(new UnlockMsg(msg.request), getSelf());
 
+                        // If the current newest version is null
                         if (msg.request.getCurrBest() == null) {
+
+                            // Send an error to the client
                             msg.request.getClient().tell(new ErrorMsg("Error message for Read Request - request id: " + msg.request.getID() + ", key: " + msg.request.getKey() + ". Value does not exist in the ring"), getSelf());
                         }
                         else {
+
+                            // Return a message to the client
                             msg.request.getClient().tell(new ReturnValueMsg(currBest, msg.request.getID(), msg.request.getType()), getSelf());
                         }
-
-                        
-
                     }
                 }
-                else {                  //WRITE
-                    if (nResponses >= write_quorum) {
-                        // TODO ritornare solo messaggio di ok
-                        //System.out.println("HO RAGGIUNTO IL WRITE QUORUM");
-                        msg.request.getClient().tell(new ReturnValueMsg(currBest, msg.request.getID(), msg.request.getType()), getSelf());
-                        int index = getIndexOfFirstNode(msg.request.getKey());
-                        int newVersion = currBest.getVersion() + 1;
-                        /*
-                        if (currBest.getVersion() == 0) {
-                            newVersion = 1;
-                        }
-                        else {
-                            newVersion = currBest.getVersion() + 1;
-                            //System.out.println("STO AGGIORNANDO LA VERSIONE " + newVersion);
-                        }
-                         */
 
+                // If it is an update request
+                else {                  
+
+                    // If the number of responses is greater or equal to the write quorum
+                    if (nResponses >= write_quorum) {
+
+                        // Return a message to the client
+                        msg.request.getClient().tell(new ReturnValueMsg(currBest, msg.request.getID(), msg.request.getType()), getSelf());
+
+                        // Get the idex of the owner of the item
+                        int index = getIndexOfFirstNode(msg.request.getKey());
+                        // Increment the version
+                        int newVersion = currBest.getVersion() + 1;
+                        
+                        // For every node that has the item
                         for (int i = index; i < N + index; i++) {
+
                             int length = peers.size();
+                            // Find the actor for that peer
                             ActorRef actor = peers.get(i % length).getActor();
+
+                            // Send a message to the actor in order to change the value
                             actor.tell(new ChangeValueMsg(msg.request, newVersion), getSelf());
                         }
 
+                        // Remove the request from the active requests
                         activeRequests.remove(msg.request);
+                        // Add the request to the pending requests
                         pendingRequests.add(msg.request);
-                        //mettiamo la richiesta in un altro array in attesa dei messaggi di ok
-                        // AGGIUNGO UN PASSAGGIO IN CUI ATTENDO CHE I NODI MI RISPONDANO OK PER L'UPDATE IN MODO DA POTER FARE L'UNLOCK DELL'ITEM NELL'OWNER
-
                     } 
                 }
-
             }
         }
 
@@ -663,11 +977,7 @@ public class Ring {
                 this.storage.get(key).unlockRead();
             }
             else {
-                this.storage.get(key).unlockUpdate();
-                for(Peer p: peers){
-                    //printNode();
-                }
-                
+                this.storage.get(key).unlockUpdate();            
             }
         }
 

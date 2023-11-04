@@ -146,14 +146,14 @@ public class DHTSystem {
                     // Create the new peer with ID
                     Peer p = new Peer(id, system.actorOf(Ring.Node.props(id), "peer" + id));
 
+                    addPeer(p, group);
+
                     // Bootstrapping node
                     System.out.println("Enter the ID of the bootstrapping node");
                     int idBoot = in.nextInt();
 
-                    int index = getMyIndex(id, group);
-
                     // Send joining request
-                    group.get(idBoot).getActor().tell(new Ring.JoinRequestMsg(p, group.get(idBoot).getActor()), client3);
+                    group.get(getMyIndex(idBoot, group)).getActor().tell(new Ring.JoinRequestMsg(p, group.get(getMyIndex(idBoot, group)).getActor()), client3);
 
                     // Add the new peer to the group
                     addPeer(p, group);
@@ -216,12 +216,16 @@ public class DHTSystem {
                     test2.testCrashRecovery(system);
                     break;
 
-                case 10:
+                case 10:        // Final test of all operations
+
+                    // Initialize class test
                     Test test_final = new Test(system, group);
+                    // Test all operations of the system
                     test_final.completeTest(system);
                     break;
+
                 default:
-                    System.out.println("Insert a value from 1 to 7");
+                    System.out.println("Insert a value from 1 to 10");
                     break;
             }
         }
