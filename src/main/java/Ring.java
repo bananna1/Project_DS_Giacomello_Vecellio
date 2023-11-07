@@ -610,7 +610,7 @@ public class Ring {
             System.out.println("Request started - id request: " + request.getID() + ", type: " + request.getType() + ", Key: " + request.getKey() + ", client: " + request.getClient());
             
             // Send a message to the owner actor to handle the request
-            owner.tell(new RequestAccessMsg(request), getSelf());
+            owner.tell(new RequestAccessMsg(request), getSelf()); 
         }
 
         /**
@@ -881,7 +881,7 @@ public class Ring {
                 // If the current newest version is null
                 if (currBest == null) {
 
-                    // Set che newest version to the version of the item
+                    // Set the newest version to the version of the item
                     msg.request.setCurrBest(msg.item);
                 }
 
