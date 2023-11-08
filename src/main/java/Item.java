@@ -4,7 +4,7 @@ public class Item {
     private int version;                        // Version of the item
 
     private boolean lockedUpdate = false;       // If the item is lock for update 
-    private int nLockedRead = 0;                // Number of lock for read the item
+    private int nLockedRead = 0;                // Number of lock for read on the item
 
     /**
      * Constructor for Item
@@ -52,8 +52,8 @@ public class Item {
     }
     
     /**
-     * Method used to see if the item is lock or not for an update
-     * @return True if the item is not lock, false if it is lock
+     * Method used to lock the item for update
+     * @return true if access is granted to the item (i.e. the lock was successful), false otherwise
      */
     public boolean lockUpdate() {
 
@@ -76,19 +76,19 @@ public class Item {
 
     /**
      * Method used to see if the item is lock or not for update
-     * @return If the item is lock for update
+     * @return If the item is locked for update
      */
     public boolean isLockedUpdate() {
         return this.lockedUpdate;
     }
     
     /**
-     * Method used to see if an item is lock for read or not
-     * @return If the item is lock for read 
+     * Method used to lock an item for read
+     * @return true if access is granted to the item (i.e. the lock was successful), false otherwise
      */
     public boolean lockRead() {
 
-        // If the item is lock for update
+        // If the item is locked for update
         if (this.lockedUpdate) {
             return false;
         }
@@ -109,8 +109,8 @@ public class Item {
     }
 
     /**
-     * Method used to see if the is lock or not for read
-     * @return If the item is lock for read
+     * Method used to see if the item is locked or not for read
+     * @return true f the item is locked for read
      */
     public boolean isLockedRead() {
         return (nLockedRead > 0);

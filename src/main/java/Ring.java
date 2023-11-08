@@ -740,7 +740,7 @@ public class Ring {
          */
         private void onGetValueMsg(GetValueMsg msg) {
 
-            // If the node has creashed, do nothing
+            // If the node has crashed, do nothing
             if(this.hasCrashed){ return; }
             
             // Set the key to the key of the message
@@ -786,7 +786,7 @@ public class Ring {
          */
         private void onUpdateValueMsg(UpdateValueMsg msg){
             
-            // If the node has creashed, do nothing
+            // If the node has crashed, do nothing
             if(this.hasCrashed){ return; }
 
             // Set the key to the key specified in the message
@@ -814,7 +814,7 @@ public class Ring {
          */
         private void onRequestAccessMsg(RequestAccessMsg msg) {
 
-            // If the node has creashed, do nothing
+            // If the node has crashed, do nothing
             if(this.hasCrashed){ return; }
 
             // Create a new Item for the specified key
@@ -861,25 +861,11 @@ public class Ring {
                 // Set access granted to the lock of the item
                 accessGranted = i.lockUpdate();
 
-                // If access granted
-                if (accessGranted) {
-
-                    // Print the request
-                    System.out.println("Access GRANTED for update operation - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
-                }
-
-                // If access not granted
-                else{
-
-                    // Print access denied for that request
-                    System.out.println("Access DENIED for update operation - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
-                }
-
             }
 
             // If access granted
             if (accessGranted) {
-
+                System.out.println("Access granted - id request: " + msg.request.getID() + ", type: " + msg.request.getType() + ", Key: " + msg.request.getKey() + ", client: " + msg.request.getClient());
                 // Send a new AccessResponde message
                 coordinator.tell(new AccessResponseMsg(true, false, msg.request), getSelf());
             }
@@ -900,7 +886,7 @@ public class Ring {
          */
         private void onAccessResponseMsg(AccessResponseMsg msg) {
 
-            // If the node has creashed, do nothing
+            // If the node has crashed, do nothing
             if(this.hasCrashed){ return; }               
 
             // If access granted
@@ -955,7 +941,7 @@ public class Ring {
          */
         private void onRequestValueMsg(RequestValueMsg msg) {
             
-            // If the node has creashed, do nothing
+            // If the node has crashed, do nothing
             if(this.hasCrashed){ return; }
 
             // Create a new item with that key and value, with version 0
@@ -984,7 +970,7 @@ public class Ring {
          */
         private void onValueResponseMsg(ValueResponseMsg msg) {
 
-            // If the node has creashed, do nothing
+            // If the node has crashed, do nothing
             if(this.hasCrashed){ return; }
 
             // If the request is in the active request
@@ -1084,7 +1070,7 @@ public class Ring {
          */
         public void onChangeValueMsg(ChangeValueMsg msg) {
 
-            // If the node has creashed, do nothing
+            // If the node has crashed, do nothing
             if(this.hasCrashed){ return; }
 
             // Create a new item
@@ -1106,7 +1092,7 @@ public class Ring {
          */
         public void onUnlockMsg(UnlockMsg msg) {
 
-            // If the node has creashed, do nothing
+            // If the node has crashed, do nothing
             if(this.hasCrashed){ return; }
 
             // Get the key of the item to unlock
@@ -1135,7 +1121,7 @@ public class Ring {
          */
         public void onOkMsg(OkMsg msg) {
 
-            // If the node has creashed, do nothing
+            // If the node has crashed, do nothing
             if(this.hasCrashed){ return; }
 
             // If the request is in the pending requests
@@ -1348,7 +1334,7 @@ public class Ring {
          */
         public void onJoinRequestMsg(JoinRequestMsg msg) {
 
-            // If the node has creashed, do nothing
+            // If the node has crashed, do nothing
             if(this.hasCrashed){ return; }
 
             // Set the variable to false
@@ -1388,7 +1374,7 @@ public class Ring {
          */
         public void onSendPeerListMsg(SendPeerListMsg msg) {
 
-            // If the node has creashed, do nothing
+            // If the node has crashed, do nothing
             if(this.hasCrashed){ return; } 
 
             // Set the external request to the message request
@@ -1423,7 +1409,7 @@ public class Ring {
          */
         public void onGetNeighborItemsMsg(GetNeighborItemsMsg msg){
 
-            // If the node has creashed, do nothing
+            // If the node has crashed, do nothing
             if(this.hasCrashed){ return; }
 
             // Send message to the joining node with the items list
@@ -1438,7 +1424,7 @@ public class Ring {
          */
         public void onSendItemsListMsg(SendItemsListMsg msg) {
 
-            // If the node has creashed, do nothing
+            // If the node has crashed, do nothing
             if(this.hasCrashed){ return; } 
 
             // Set the storage of the joining node
@@ -1480,7 +1466,7 @@ public class Ring {
          */
         public void onReturnValueMsg(ReturnValueMsg msg) {
 
-            // If the node has creashed, do nothing
+            // If the node has crashed, do nothing
             if(this.hasCrashed){ return; } 
 
             // Increment the number of responses
@@ -1549,7 +1535,7 @@ public class Ring {
          */
         public void onAnnounceJoiningNodeMsg(AnnounceJoiningNodeMsg msg) {
             
-            // If the node has creashed, do nothing
+            // If the node has crashed, do nothing
             if(this.hasCrashed){ return; }
 
             // Update the list of peers
@@ -1587,7 +1573,7 @@ public class Ring {
          */
         public void onLeaveRequestMsg(LeaveRequestMsg msg) {
 
-            // If the node has creashed, do nothing
+            // If the node has crashed, do nothing
             if(this.hasCrashed){ return; }
 
             Enumeration<Integer> e = storage.keys();
@@ -1635,7 +1621,7 @@ public class Ring {
          */
         public void onAddItemToStorageMsg(AddItemToStorageMsg msg) {
 
-            // If the node has creashed, do nothing
+            // If the node has crashed, do nothing
             if(this.hasCrashed){ return; }
             
             // Insert the item in the storage
@@ -1649,15 +1635,15 @@ public class Ring {
          */
         public void onAnnounceLeavingNodeMsg(AnnounceLeavingNodeMsg msg) {
 
-            // If the node has creashed, do nothing
+            // If the node has crashed, do nothing
             if(this.hasCrashed){ return; }
 
-            System.out.println("Node " + this.id + " has received announcement of node leaving");
+            //System.out.println("Node " + this.id + " has received announcement of node leaving");
 
             // Remove the leaving node
             boolean isMe = (peers.get(msg.leavingNodeIndex).getID() == this.id);
             peers.remove(msg.leavingNodeIndex);
-            System.out.println("Node " + this.id + "'s peers: " + this.printPeers());
+            //System.out.println("Node " + this.id + "'s peers: " + this.printPeers());
 
             // Print the node
             if(!isMe) {
