@@ -252,6 +252,11 @@ public class Test {
         System.out.println("TEST 3 COMPLETED");
     }
 
+    /**
+     * Void method to test all the operations: read, write, join, leave, crash, and recovery
+     * @param system Actor System 
+     * @throws InterruptedException
+     */
     public void completeTest(ActorSystem system) throws InterruptedException {
         System.out.println("-----------------------------------------------------");
         System.out.println("The purpose of this test is to test together basically all the functionalities available in the ring to make sure \n that the ring is well-equipped to manage them together, as well \n that the nodes store the correct items and values of said items even after a lot of operations");

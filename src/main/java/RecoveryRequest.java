@@ -1,7 +1,11 @@
 import akka.actor.ActorRef;
 
 public class RecoveryRequest extends ExternalRequest {
-    // INSERIRE CAMPI SPECIFICI DEL RECOVERY
+    
+    /**
+     * Constructor of the recovery request
+     * @param client Client that request the recovery
+     */
     public RecoveryRequest(ActorRef client) {
         super(Ring.Node.ExternalRequestType.Recovery, client);
     }
