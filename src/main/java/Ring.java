@@ -12,16 +12,14 @@ import java.util.LinkedList;
 import java.util.Queue;
 import java.util.concurrent.TimeUnit;
 
-//import Ring.Node.RequestType;
-
 import java.util.Enumeration;
 
 public class Ring {
     // Start message that sends the list of participants to everyone
     public static class StartMessage implements Serializable {
-        public final List<Peer> group;
-        public final List<Integer> keys;
-        public final List<String> values;
+        public final List<Peer> group;                  // List of peers
+        public final List<Integer> keys;                // List of keys
+        public final List<String> values;               // List of values
 
         /**
          * Constructor for StartMessage
@@ -37,8 +35,14 @@ public class Ring {
     }
 
     public static class UpdateValueMsg implements Serializable {
-        public final int key;
-        public final String value;
+        public final int key;                           // Key of the item
+        public final String value;                      // Value to update
+        
+        /**
+         * Constructor of UpdateValueMsg
+         * @param key Key of the item
+         * @param value Value to update
+         */ 
         public UpdateValueMsg(int key, String value) {
             this.key = key;
             this.value = value;
@@ -61,38 +65,58 @@ public class Ring {
             this.type = type;
         }
         /**
-         * @param key
+         * @param key key from which to request the value 
          */
         public GetValueMsg(int key) {
             this.key = key;
+
+            // Set the type of the request to read
             this.type = Ring.Node.RequestType.Read;
         }
     }
 
     public static class RequestAccessMsg implements Serializable {
-        public final Request request;
+        public final Request request;                       // Request
+
+        /**
+         * @param request Request
+         */
         public RequestAccessMsg(Request request) {
             this.request = request;
         }
     }
 
     public static class RequestValueMsg implements Serializable {
-        public final Request request;
+        public final Request request;                       // Request
+        
+        /**
+         * @param request Request
+         */
         public RequestValueMsg(Request request) {
             this.request = request;
         }
     }
 
     public static class AccessResponseMsg implements Serializable {
-        public final boolean accessGranted;
-        public final boolean itemNotFound;
-        public final Request request;
+        public final boolean accessGranted;                 // If the item is lock or not
+        public final boolean itemNotFound;                  // If the item is found or not
+        public final Request request;                       // Request
+        
+        /**
+         * @param accessGranted If the item is lock or not
+         * @param itemNotFound If the item is found or not
+         * @param request Request
+         */
         public AccessResponseMsg(boolean accessGranted, boolean itemNotFound, Request request) {
             this.accessGranted = accessGranted;
             this.request = request;
+
+            // If the item is not found for a read request
             if (itemNotFound && request.getType() == Node.RequestType.Read && accessGranted == false) {
                 this.itemNotFound = true;
             }
+
+            // If it is a new item for update request
             else {
                 this.itemNotFound = false;
             }
@@ -100,18 +124,29 @@ public class Ring {
     }
 
     public static class ValueResponseMsg implements Serializable {
-        public final Item item;
-        public final Request request;
-        public ValueResponseMsg(Item item, Request request) {
+        public final Item item;                         // Item
+        public final Request request;                   // Request
+
+        /**
+             * @param item Item
+             * @param request Request
+             */
+            public ValueResponseMsg(Item item, Request request) {
             this.item = item;
             this.request = request;
         }
     }
 
     public static class ReturnValueMsg implements Serializable {
-        public final Item item;
-        public final int requestID;
-        public final Ring.Node.RequestType requestType;
+        public final Item item;                         // Item
+        public final int requestID;                     // ID of the request
+        public final Ring.Node.RequestType requestType; // Type of the request
+
+        /**
+         * @param item Request
+         * @param requestID ID of the request
+         * @param requestType Type of the request
+         */
         public ReturnValueMsg(Item item, int requestID, Ring.Node.RequestType requestType) {
             this.item = item;
             this.requestID = requestID;
@@ -120,8 +155,13 @@ public class Ring {
     }
 
     public static class ChangeValueMsg implements Serializable {
-        public final Request request;
-        public final int newVersion;
+        public final Request request;                   // Request
+        public final int newVersion;                    // New version for the item
+        
+        /**
+         * @param request Request
+         * @param newVersion New version for the item
+         */
         public ChangeValueMsg(Request request, int newVersion) {
             this.request = request;
             this.newVersion = newVersion;
@@ -129,47 +169,72 @@ public class Ring {
     }
 
     public static class UnlockMsg implements Serializable {
-        public final Request request;
+        public final Request request;                   // Request
+        
+        /**
+         * @param request Request
+         */
         public UnlockMsg(Request request) {
             this.request = request;
         }
     }
 
     public static class OkMsg implements Serializable {
-        public final Request request;
+        public final Request request;                   // Request
+       
+        /**
+         * @param request Request
+         */
         public OkMsg(Request request) {
             this.request = request;
         }
     }
 
     public static class ErrorMsg implements Serializable {
-        public final String error;
+        public final String error;                      // Error message
+
+        /**
+         * @param error Error message
+         */
         public ErrorMsg(String error) {
             this.error = error;
         }
     }
 
     public static class TimeoutRequest implements Serializable {
-        public final int id_request;
+        public final int id_request;                    // ID of the request
+        
+        /**
+         * @param id_request ID of the request
+         */ 
         public TimeoutRequest(int id_request) {
             this.id_request = id_request;
         }
     }
 
     public static class TimeoutDequeue implements Serializable {
-        public TimeoutDequeue() {
-        }
+        public TimeoutDequeue() {        }
     }
+    
     public static class TimeoutExternalRequest implements Serializable {
-        public final int externalRequestId;
+        public final int externalRequestId;                     // ID of the external request
+        
+        /**
+         * @param externalRequestId ID of the external request
+         */
         public TimeoutExternalRequest(int externalRequestId) {
             this.externalRequestId = externalRequestId;
         }
     }
 
     public static class JoinRequestMsg implements Serializable {
-        public final Peer joiningPeer;
-        public final ActorRef bootStrappingPeer;
+        public final Peer joiningPeer;                          // Joining peer
+        public final ActorRef bootStrappingPeer;                // Boot-strapping peer
+
+        /**
+         * @param joiningPeer Joining peer
+         * @param bootStrappingPeer Boot-strapping peer
+         */
         public JoinRequestMsg(Peer joiningPeer, ActorRef bootStrappingPeer){
             this.joiningPeer = joiningPeer;
             this.bootStrappingPeer = bootStrappingPeer;
@@ -177,8 +242,13 @@ public class Ring {
     }
 
     public static class SendPeerListMsg implements Serializable {
-        public final List<Peer> group;
-        public final ExternalRequest request;
+        public final List<Peer> group;                          // List of peers
+        public final ExternalRequest request;                   // External request
+        
+        /**
+         * @param group List of peers
+         * @param request External request
+         */
         public SendPeerListMsg(List<Peer> group, ExternalRequest request){
             this.group = Collections.unmodifiableList(new ArrayList<>(group));
             this.request = request;
@@ -186,21 +256,28 @@ public class Ring {
     }
 
     public static class GetNeighborItemsMsg implements Serializable {
-        public GetNeighborItemsMsg() {
-
-        }
+        public GetNeighborItemsMsg() {        }
     }
 
     public static class SendItemsListMsg implements Serializable {
-        public final Hashtable<Integer, Item> items;
+        public final Hashtable<Integer, Item> items;                    // Hashtable of items, with keys and values
+        
+        /**
+         * @param items List of items, with keys and values
+         */
         public SendItemsListMsg(Hashtable<Integer, Item> items){
             this.items = items;
         }
     }
 
     public static class AnnounceJoiningNodeMsg implements Serializable {
-        public final int joiningNodeKey;
-        public final List<Item> items;
+        public final int joiningNodeKey;                               // Key of the joining node
+        public final List<Item> items;                                 // List of items
+        
+        /**
+         * @param joiningNodeKey Key of the joining node
+         * @param items List of items
+         */
         public AnnounceJoiningNodeMsg(int joiningNodeKey, List<Item> items) {
             this.joiningNodeKey = joiningNodeKey;
             this.items = items;
@@ -208,58 +285,78 @@ public class Ring {
     }
 
     public static class LeaveRequestMsg implements Serializable {
-        public LeaveRequestMsg() {
-        }
+        public LeaveRequestMsg() {        }
     }
+
     public static class AddItemToStorageMsg implements Serializable {
-        public final Item item;
+        public final Item item;                         // Item to add to the storage
+
+        /**
+         * @param item Item to add to the storage
+         */
         public AddItemToStorageMsg(Item item) {
             this.item = item;
         }
     }
 
     public static class AnnounceLeavingNodeMsg implements Serializable {
-        public final int leavingNodeIndex;
+        public final int leavingNodeIndex;                          // Index of the leaving node
+        
+        /**
+         * @param index Index of the leaving node
+         */
         public AnnounceLeavingNodeMsg(int index) {
             leavingNodeIndex = index;
         }
     }
 
     public static class CrashRequestMsg implements Serializable {
-        public CrashRequestMsg() {
-
-        }
+        public CrashRequestMsg() {         }
     }
 
     public static class RecoveryRequestMsg implements Serializable {
-        public final ActorRef nodeToContact;
+        public final ActorRef nodeToContact;                        // Node to contact for the list of peers
+        
+        /**
+         * @param nodeToContact Node to contact for the list of peers
+         */
         public RecoveryRequestMsg(ActorRef nodeToContact) {
             this.nodeToContact = nodeToContact;
         }
     }
 
     public static class GetPeerListMsg implements Serializable {
-        public GetPeerListMsg() {
-
-        } 
+        public GetPeerListMsg() {        } 
     }
 
     public static class SendPeerListRecoveryMsg implements Serializable {
-        public final List<Peer> group;
+        public final List<Peer> group;                              // List of peers
+
+        /**
+         * @param group List of peers
+         */
         public SendPeerListRecoveryMsg(List<Peer> group) {
             this.group = Collections.unmodifiableList(new ArrayList<>(group));
         }
     }
 
     public static class GetItemsListMsg implements Serializable {
-        public final int recoveryNodeID;
+        public final int recoveryNodeID;                            // ID of the recovery node
+        
+        /**
+         * @param recoveryNodeID ID of the recovery node
+         */
         public GetItemsListMsg(int recoveryNodeID) {
             this.recoveryNodeID = recoveryNodeID;
         }
     }
 
     public static class SendItemsListRecoveryMsg implements Serializable {
-        public final Hashtable<Integer, Item> items;
+        public final Hashtable<Integer, Item> items;                // Hashtable of items, with keys and values
+        
+        /**
+         * @param items Hashtable of items, with keys and values
+         */
         public SendItemsListRecoveryMsg(Hashtable<Integer, Item> items){
             this.items = items;
         }
@@ -267,57 +364,81 @@ public class Ring {
 
     public static class Node extends AbstractActor{
 
-        private int id;                                                         // Node ID
-        private ActorRef actor;
-        private Hashtable<Integer, Item> storage = new Hashtable<>();            // list of keys and values
-        private List<Peer> peers = new ArrayList<>();                       // list of peer banks
+        private int id;                                                          // ID of the node
+        private ActorRef actor;                                                  // Actor of the node
+        private Hashtable<Integer, Item> storage = new Hashtable<>();            // List of keys and values
+        private List<Peer> peers = new ArrayList<>();                            // List of peers
 
-        private ArrayList<Request> activeRequests = new ArrayList<>();
+        private ArrayList<Request> activeRequests = new ArrayList<>();           // List of active requests for the node
+        private Queue<Request> requestQueue = new LinkedList<>();                // Request queue for the node
+        private ArrayList<Request> pendingRequests = new ArrayList<>();          // List of pending requests for the node
 
-        private Queue<Request> requestQueue = new LinkedList<>();
-        private ArrayList<Request> pendingRequests = new ArrayList<>();
-        public final int N = 4;
+        public final int N = 4;                                                  // Number of peers that have an item
 
-        public final int TIMEOUT_REQUEST = 5000;
-        public final int TIMEOUT_DEQUEUE = 2000;
-        public final int TIMEOUT_JOIN = 5000;
-        public final int TIMEOUT_RECOVERY = 10000;
+        public final int TIMEOUT_REQUEST = 5000;                                 // Timeout for read/update
+        public final int TIMEOUT_DEQUEUE = 2000;                                 // Timeout for dequeue
+        public final int TIMEOUT_JOIN = 5000;                                    // Timeout for join
+        public final int TIMEOUT_RECOVERY = 10000;                               // Timeout for recovery
 
-        public final int read_quorum = N / 2 + 1;
-        public final int write_quorum = N / 2 + 1;
+        public final int read_quorum = N / 2 + 1;                                // Read quorum
+        public final int write_quorum = N / 2 + 1;                               // Update quorum
 
-        private boolean hasCrashed = false;
-        private ExternalRequest currExternalRequest = null;
+        private boolean hasCrashed = false;                                      // If the node has crashed or not
+        private ExternalRequest currExternalRequest = null;                      // Current extenral request
 
-        public enum RequestType {
+        public enum RequestType {                                                // Request type
             Read,
             Update,
             ReadJoin,
             ReadRecovery
         }
 
-        public enum ExternalRequestType {
+        public enum ExternalRequestType {                                        // External request type
             Join,
             Leave,
             Recovery
         }
 
-        /*-- Node constructor --------------------------------------------------- */
+        
+        /**
+         * @param id ID of the node
+         */
         public Node(int id){
             super();
             this.id = id;
             setTimeoutDequeue(TIMEOUT_DEQUEUE);
         }
+        
+        /**
+         * Method to get the ID of the node
+         * @return ID of the node
+         */
         public int getID() {
             return this.id;
         }
+
+        /**
+         * Method to get the actor of the node
+         * @return Actor of the node
+         */
         public ActorRef getActor() {
             return this.actor;
         }
+
+        /**
+         * Method to remove an item based on the key
+         * @param key Key of the item to remove
+         */
         public void removeValue (int key) {
             storage.remove(key);
         }
 
+        /**
+         * Method to add an item to the storage
+         * @param key Key of the item to add
+         * @param value Value of the item to add
+         * @param version Version of the item to add
+         */
         public void addValue (int key, String value, int version) {
             storage.put(key, new Item(key, value, version));
         }
