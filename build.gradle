@@ -18,8 +18,12 @@ dependencies {
     //implementation platform("com.typesafe.akka:akka-bom_${versions.ScalaBinary}:2.6.13")
     implementation "com.lightbend.akka:akka-projection-core_${versions.ScalaBinary}:1.4.2"
     implementation "com.typesafe.akka:akka-actor_${versions.ScalaBinary}"
+    implementation "org.slf4j:slf4j-simple:1.7.9"
     testImplementation "com.typesafe.akka:akka-testkit_${versions.ScalaBinary}"
+    //"log4j-slf4j-impl"
+
 }
+
 
 compileJava {
     options.compilerArgs += ["-Xlint:deprecation"]
